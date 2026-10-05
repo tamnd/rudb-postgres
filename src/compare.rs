@@ -69,6 +69,49 @@ pub(crate) fn frames(oracle: &[Frame], other: &[Frame]) -> Vec<Difference> {
     out
 }
 
+/// Compares the answers to one statement. Without a top-level `ORDER BY`, the rows are a
+/// multiset, so each run of `DataRow` frames is sorted before the comparison. The `CopyData`
+/// frames of a `COPY TO` are joined, because the answer is the bytes and not the frame
+/// boundaries. Without an order, their lines are sorted too.
+pub(crate) fn answer(oracle: &[Frame], other: &[Frame], ordered: bool) -> Vec<Difference> {
+    frames(&normalize(oracle, ordered), &normalize(other, ordered))
+}
+
+fn normalize(frames: &[Frame], ordered: bool) -> Vec<Frame> {
+    let mut out: Vec<Frame> = Vec::with_capacity(frames.len());
+    let mut run_start = 0;
+    for f in frames {
+        if f.tag == b'd' {
+            if let Some(last) = out.last_mut().filter(|l| l.tag == b'd') {
+                last.body.extend_from_slice(&f.body);
+                continue;
+            }
+        }
+        if f.tag != b'D' || out.last().is_none_or(|l| l.tag != b'D') {
+            sort_rows(&mut out[run_start..], ordered);
+            run_start = out.len();
+        }
+        out.push(f.clone());
+    }
+    sort_rows(&mut out[run_start..], ordered);
+    if !ordered {
+        for f in out.iter_mut().filter(|f| f.tag == b'd') {
+            if let Ok(text) = std::str::from_utf8(&f.body) {
+                let mut lines: Vec<&str> = text.split_inclusive('\n').collect();
+                lines.sort_unstable();
+                f.body = lines.concat().into_bytes();
+            }
+        }
+    }
+    out
+}
+
+fn sort_rows(run: &mut [Frame], ordered: bool) {
+    if !ordered && run.first().is_some_and(|f| f.tag == b'D') {
+        run.sort_by(|a, b| a.body.cmp(&b.body));
+    }
+}
+
 /// Compares one pair of frames of the same type under the rule for that type.
 fn one(a: &Frame, b: &Frame) -> Option<Difference> {
     let differ = |what: &str, x: String, y: String| {
@@ -93,6 +136,7 @@ fn one(a: &Frame, b: &Frame) -> Option<Difference> {
                 )
             })
             .flatten(),
+        b'D' => (a.body != b.body).then(|| differ("DataRow", data_row(a), data_row(b))).flatten(),
         _ => (a.body != b.body)
             .then(|| differ(frame::backend_name(a.tag), show(&a.body), show(&b.body)))
             .flatten(),
@@ -132,6 +176,25 @@ fn row_description(f: &Frame) -> String {
         out.push_str(&format!("; {name:?} table {table} column {column} type {ty} size {size} modifier {modifier} format {format}"));
     }
     out
+}
+
+/// A `DataRow` for a person: each column as text when it is text, as hex when it is not, and
+/// NULL for a null. The comparison is on the bytes, and this is only how they are shown.
+fn data_row(f: &Frame) -> String {
+    let mut fields = f.fields();
+    let Some(count) = fields.i16() else { return show(&f.body) };
+    let mut columns = Vec::new();
+    for _ in 0..count {
+        match fields.i32() {
+            Some(-1) => columns.push("NULL".to_string()),
+            Some(n) if n >= 0 => match fields.take(n as usize) {
+                Some(bytes) => columns.push(show(bytes)),
+                None => return show(&f.body),
+            },
+            _ => return show(&f.body),
+        }
+    }
+    format!("[{}]", columns.join(", "))
 }
 
 /// An `ErrorResponse` or `NoticeResponse` without the fields `F`, `L` and `R`, which name a C
@@ -304,6 +367,34 @@ mod tests {
             (d[0].oracle.as_str(), d[0].other.as_str()),
             ("CommandComplete", "ErrorResponse")
         );
+    }
+
+    fn data_row(value: &str) -> Frame {
+        let mut body = 1i16.to_be_bytes().to_vec();
+        body.extend_from_slice(&(value.len() as i32).to_be_bytes());
+        body.extend_from_slice(value.as_bytes());
+        Frame::new(b'D', body)
+    }
+
+    #[test]
+    fn rows_are_a_multiset_without_an_order_by() {
+        let done = Frame::new(b'C', b"SELECT 2\0".to_vec());
+        let a = [row_description(0), data_row("1"), data_row("2"), done.clone()];
+        let b = [row_description(0), data_row("2"), data_row("1"), done.clone()];
+        assert!(answer(&a, &b, false).is_empty());
+        assert_eq!(answer(&a, &b, true)[0].what, "DataRow");
+        let c = [row_description(0), data_row("1"), data_row("1"), done];
+        assert_eq!(answer(&a, &c, false)[0].what, "DataRow");
+    }
+
+    #[test]
+    fn copy_data_is_compared_as_bytes_and_not_as_frames() {
+        let a = [Frame::new(b'd', b"1\n".to_vec()), Frame::new(b'd', b"2\n".to_vec())];
+        let b = [Frame::new(b'd', b"1\n2\n".to_vec())];
+        assert!(answer(&a, &b, true).is_empty());
+        let c = [Frame::new(b'd', b"2\n1\n".to_vec())];
+        assert!(answer(&a, &c, false).is_empty());
+        assert_eq!(answer(&a, &c, true).len(), 1);
     }
 
     #[test]

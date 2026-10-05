@@ -11,12 +11,15 @@ mod client;
 mod compare;
 mod connect;
 mod crypto;
+mod diff;
 mod frame;
+mod json;
 mod oracle;
 mod pins;
 mod process;
 mod scram;
 mod servers;
+mod sql;
 mod toml;
 
 const USAGE: &str = "\
@@ -31,7 +34,9 @@ commands:
   connect               log in to both servers each way and compare the replies
   record --to <server>  start the proxy in front of a server and write a trace per session
   replay <trace>        replay a trace against both servers and compare the replies
-  diff <file.sql>       run each statement on both servers and compare the answers
+  diff [--rpg] <file.sql>...
+                        run each statement on both servers in three modes and compare
+                        the answers; --rpg runs as rpg over tcp, not as the superuser
   gen                   generate statements and run them through diff
   client <name>         run one client suite against both servers
   regress               run the core regression suite
@@ -76,8 +81,11 @@ fn main() -> ExitCode {
             Ok(servers) => differences(connect::run(&servers[0], &servers[1])),
             Err(error) => report(Err(error)),
         },
-        "oracle" | "record" | "replay" | "diff" | "gen" | "client" | "regress" | "isolation"
-        | "report" => {
+        "diff" => match diff_command(&args[1..]) {
+            Ok(count) => differences(count),
+            Err(error) => report(Err(error)),
+        },
+        "oracle" | "record" | "replay" | "gen" | "client" | "regress" | "isolation" | "report" => {
             eprintln!("rudb-postgres {command}: not written yet, see tamnd/rudb#2488");
             ExitCode::from(NOT_WRITTEN)
         }
@@ -97,6 +105,35 @@ fn report(result: Result<(), String>) -> ExitCode {
             ExitCode::from(BROKEN)
         }
     }
+}
+
+/// Runs `diff` on each file and writes `run/results/diff.json`.
+fn diff_command(args: &[String]) -> Result<usize, String> {
+    let rpg = args.iter().any(|a| a == "--rpg");
+    let files: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
+    if files.is_empty() {
+        return Err("diff needs at least one file".to_string());
+    }
+    let root = pins::root()?;
+    let servers = servers::load(&root)?;
+    let mut total = 0;
+    let mut results = Vec::new();
+    for file in files {
+        let (count, json) = diff::run(
+            std::path::Path::new(file),
+            &servers[0],
+            &servers[1],
+            &diff::Options { rpg },
+        )?;
+        total += count;
+        results.push(json);
+    }
+    let dir = root.join("run").join("results");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let path = dir.join("diff.json");
+    std::fs::write(&path, json::Json::Array(results).pretty())
+        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    Ok(total)
 }
 
 /// Exit code 1 when something differs, so that a script can stop on it.

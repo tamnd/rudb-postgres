@@ -26,7 +26,7 @@ The build is a meson release build with no assertions. `oracle/build.sh` has the
 | `rudb-postgres connect` | Logs in to both servers in each way and compares the replies |
 | `rudb-postgres record --to <server>` | Starts the proxy in front of a server and writes a trace for each session |
 | `rudb-postgres replay <trace>` | Replays a trace against both servers and compares the replies |
-| `rudb-postgres diff <file.sql>` | Runs each statement on both servers and compares the answers |
+| `rudb-postgres diff <file.sql>` | Runs each statement on both servers, in the simple query and in the extended query with text and binary results, and compares the answers |
 | `rudb-postgres gen --seed <n> --count <n>` | Generates statements and runs them through `diff` |
 | `rudb-postgres client <name>` | Runs one client suite against both servers and applies its lists |
 | `rudb-postgres regress` | Runs the core regression suite |
