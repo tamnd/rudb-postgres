@@ -50,10 +50,47 @@ jobs:
       - name: the command line answers
         run: cargo run -q -- help
 
+  # The oracle, built from the pin and cached by the pin and the build script, which holds the
+  # flags. A cold build takes about ten minutes, so the cache is what keeps this job short. The
+  # job then starts the oracle and its twin, which proves that the shared configuration works on
+  # a machine that is not the one it was written on.
+  oracle:
+    name: oracle build and up
+    needs: quick
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: Swatinem/rust-cache@v2.9.2
+      - uses: actions/cache@v5.0.5
+        with:
+          path: target/oracle
+          key: oracle-${{ runner.os }}-${{ hashFiles('pins.toml', 'oracle/build.sh') }}
+      - name: install the build tools
+        run: sudo apt-get install -y --no-install-recommends meson ninja-build bison flex libssl-dev uuid-dev pkg-config
+      - name: build the oracle
+        run: cargo run -q --release -- oracle build
+      - name: start the oracle and its twin
+        run: cargo run -q --release -- up
+      - name: connect over TLS with SCRAM
+        env:
+          PGPASSWORD: rpg
+        run: |
+          psql=$(ls -d target/oracle/*/bin | grep -v src)/psql
+          $psql -X "host=127.0.0.1 port=55433 user=rpg dbname=postgres sslmode=verify-full sslrootcert=oracle/certs/root.crt" -c "select version()"
+      - name: stop them
+        run: cargo run -q --release -- down
+      - name: keep the server logs
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: server-logs
+          path: run/*/server.log
+          retention-days: 14
+
   ci:
     name: ci
     if: always()
-    needs: [quick, test]
+    needs: [quick, test, oracle]
     runs-on: ubuntu-24.04
     steps:
       - name: fail if anything upstream failed
