@@ -60,6 +60,10 @@ for program in \
   src/test/modules/libpq_pipeline/libpq_pipeline; do
   cp "$build/$program" "$prefix/test/bin/"
 done
+# The build tree gives each test program a search path to ../../interfaces/libpq, relative to the
+# program. From test/bin that is the prefix itself, so a link there finds the installed libpq.
+mkdir -p "$prefix/interfaces/libpq"
+find "$prefix/lib" \( -name 'libpq.so*' -o -name 'libpq.*dylib' \) -exec ln -sf {} "$prefix/interfaces/libpq/" \;
 for module in "$build"/src/test/regress/regress.*; do
   case "$module" in
     *.so | *.dylib | *.dll) cp "$module" "$prefix/test/bin/" ;;
