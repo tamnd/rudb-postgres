@@ -17,6 +17,7 @@ mod json;
 mod oracle;
 mod pins;
 mod process;
+mod regress;
 mod scram;
 mod servers;
 mod sql;
@@ -39,8 +40,11 @@ commands:
                         the answers; --rpg runs as rpg over tcp, not as the superuser
   gen                   generate statements and run them through diff
   client <name>         run one client suite against both servers
-  regress               run the core regression suite
-  isolation             run the isolation specs
+  regress [--accept] [<test>...]
+                        run the core regression suite with pg_regress on both servers;
+                        --accept writes the diffs of rudb to corpus/regress
+  isolation [--accept] [<spec>...]
+                        run the isolation specs with pg_isolation_regress on both servers
   report                write the report page of one run
 ";
 
@@ -85,7 +89,14 @@ fn main() -> ExitCode {
             Ok(count) => differences(count),
             Err(error) => report(Err(error)),
         },
-        "oracle" | "record" | "replay" | "gen" | "client" | "regress" | "isolation" | "report" => {
+        "regress" | "isolation" => {
+            let suite = if command == "regress" { &regress::REGRESS } else { &regress::ISOLATION };
+            match regress_command(suite, &args[1..]) {
+                Ok(count) => differences(count),
+                Err(error) => report(Err(error)),
+            }
+        }
+        "oracle" | "record" | "replay" | "gen" | "client" | "report" => {
             eprintln!("rudb-postgres {command}: not written yet, see tamnd/rudb#2488");
             ExitCode::from(NOT_WRITTEN)
         }
@@ -134,6 +145,28 @@ fn diff_command(args: &[String]) -> Result<usize, String> {
     std::fs::write(&path, json::Json::Array(results).pretty())
         .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     Ok(total)
+}
+
+/// Runs `regress` or `isolation` and writes `run/results/<suite>.json`.
+fn regress_command(suite: &regress::Suite, args: &[String]) -> Result<usize, String> {
+    let mut options = regress::Options::default();
+    for arg in args {
+        match arg.as_str() {
+            "--accept" => options.accept = true,
+            other if other.starts_with("--") => return Err(format!("unknown option {other:?}")),
+            test => options.tests.push(test.to_string()),
+        }
+    }
+    let root = pins::root()?;
+    let prefix = oracle::installed(&root, &pins::Pins::read(&root)?)?;
+    let servers = servers::load(&root)?;
+    let (count, json) = regress::run(&root, &prefix, suite, &servers[0], &servers[1], &options)?;
+    let dir = root.join("run").join("results");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let path = dir.join(format!("{}.json", suite.name));
+    std::fs::write(&path, json.pretty())
+        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    Ok(count)
 }
 
 /// Exit code 1 when something differs, so that a script can stop on it.

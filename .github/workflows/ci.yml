@@ -81,6 +81,10 @@ jobs:
         run: cargo run -q --release -- connect
       - name: the smoke file shows no difference between the oracle and its twin
         run: cargo run -q --release -- diff corpus/differential/smoke.sql
+      - name: the regression suite passes on the oracle and its twin
+        run: cargo run -q --release -- regress
+      - name: the isolation specs pass on the oracle and its twin
+        run: cargo run -q --release -- isolation
       - name: stop them
         run: cargo run -q --release -- down
       - name: keep the server logs
@@ -88,7 +92,11 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: server-logs
-          path: run/*/server.log
+          path: |
+            run/*/server.log
+            run/regress/*/regression.diffs
+            run/isolation/*/regression.diffs
+            run/results/*.json
           retention-days: 14
 
   ci:
