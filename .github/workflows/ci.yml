@@ -79,6 +79,8 @@ jobs:
           $psql -X "host=127.0.0.1 port=55433 user=rpg dbname=postgres sslmode=verify-full sslrootcert=oracle/certs/root.crt" -c "select version()"
       - name: the connect matrix shows no difference between the oracle and its twin
         run: cargo run -q --release -- connect
+      - name: the smoke file shows no difference between the oracle and its twin
+        run: cargo run -q --release -- diff corpus/differential/smoke.sql
       - name: stop them
         run: cargo run -q --release -- down
       - name: keep the server logs

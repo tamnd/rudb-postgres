@@ -79,6 +79,79 @@ pub(crate) fn query(sql: &str) -> Frame {
     Frame::new(b'Q', body)
 }
 
+/// `Parse` with the type OIDs of the parameters, zero for "let the server decide".
+pub(crate) fn parse(name: &str, sql: &str, types: &[u32]) -> Frame {
+    let mut body = Vec::new();
+    cstr(&mut body, name);
+    cstr(&mut body, sql);
+    body.extend_from_slice(&(types.len() as u16).to_be_bytes());
+    for t in types {
+        body.extend_from_slice(&t.to_be_bytes());
+    }
+    Frame::new(b'P', body)
+}
+
+/// `Bind` with one format code for all parameters and one for all results. A parameter of
+/// `None` is NULL.
+pub(crate) fn bind(
+    portal: &str,
+    statement: &str,
+    parameter_format: u16,
+    parameters: &[Option<Vec<u8>>],
+    result_format: u16,
+) -> Frame {
+    let mut body = Vec::new();
+    cstr(&mut body, portal);
+    cstr(&mut body, statement);
+    body.extend_from_slice(&1u16.to_be_bytes());
+    body.extend_from_slice(&parameter_format.to_be_bytes());
+    body.extend_from_slice(&(parameters.len() as u16).to_be_bytes());
+    for parameter in parameters {
+        match parameter {
+            Some(value) => {
+                body.extend_from_slice(&(value.len() as i32).to_be_bytes());
+                body.extend_from_slice(value);
+            }
+            None => body.extend_from_slice(&(-1i32).to_be_bytes()),
+        }
+    }
+    body.extend_from_slice(&1u16.to_be_bytes());
+    body.extend_from_slice(&result_format.to_be_bytes());
+    Frame::new(b'B', body)
+}
+
+/// `Describe` of a statement (`S`) or a portal (`P`).
+pub(crate) fn describe(kind: u8, name: &str) -> Frame {
+    let mut body = vec![kind];
+    cstr(&mut body, name);
+    Frame::new(b'D', body)
+}
+
+pub(crate) fn execute(portal: &str, max_rows: u32) -> Frame {
+    let mut body = Vec::new();
+    cstr(&mut body, portal);
+    body.extend_from_slice(&max_rows.to_be_bytes());
+    Frame::new(b'E', body)
+}
+
+pub(crate) fn sync() -> Frame {
+    Frame::new(b'S', Vec::new())
+}
+
+pub(crate) fn copy_data(data: &[u8]) -> Frame {
+    Frame::new(b'd', data.to_vec())
+}
+
+pub(crate) fn copy_done() -> Frame {
+    Frame::new(b'c', Vec::new())
+}
+
+pub(crate) fn copy_fail(message: &str) -> Frame {
+    let mut body = Vec::new();
+    cstr(&mut body, message);
+    Frame::new(b'f', body)
+}
+
 pub(crate) fn terminate() -> Frame {
     Frame::new(b'X', Vec::new())
 }
