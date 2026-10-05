@@ -101,6 +101,9 @@ jobs:
           done
       - name: the libpq_pipeline sessions replay the same on the oracle and its twin
         run: cargo run -q --release -- replay corpus/protocol/libpq_pipeline/*.trace
+      # Each run takes a new seed, and the output gives it, so a run that fails can be made again.
+      - name: the generated statements give the same answers on the oracle and its twin
+        run: cargo run -q --release -- gen --seed ${{ github.run_id }} --count 1000
       - name: stop them
         run: cargo run -q --release -- down
       - name: keep the server logs
@@ -114,6 +117,7 @@ jobs:
             run/isolation/*/regression.diffs
             run/results/*.json
             run/traces/*.trace
+            run/gen/*.sql
           retention-days: 14
 
   ci:

@@ -294,6 +294,25 @@ pub(crate) fn error_text(f: &Frame) -> String {
     format!("{} {}: {}", get(b'S'), get(b'C'), get(b'M'))
 }
 
+/// The text columns of each `DataRow` in a reply, with `None` for a NULL.
+pub(crate) fn rows(frames: &[Frame]) -> Vec<Vec<Option<String>>> {
+    let mut rows = Vec::new();
+    for f in frames.iter().filter(|f| f.tag == b'D') {
+        let mut fields = f.fields();
+        let count = fields.i16().unwrap_or(0);
+        let mut row = Vec::new();
+        for _ in 0..count {
+            match fields.i32() {
+                Some(n) if n >= 0 => row
+                    .push(fields.take(n as usize).map(|b| String::from_utf8_lossy(b).into_owned())),
+                _ => row.push(None),
+            }
+        }
+        rows.push(row);
+    }
+    rows
+}
+
 /// A SCRAM nonce from the system's random source.
 fn nonce() -> String {
     let mut bytes = [0u8; 18];
