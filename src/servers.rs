@@ -168,7 +168,10 @@ fn init(root: &Path, server: &Server) -> Result<(), String> {
                 "--no-sync",
             ]),
         )?,
-        Kind::Rudb => process::run(Command::new(&server.binary).arg("init").arg(&server.data))?,
+        // The same superuser as the oracle, so that `setup.sql` runs as `postgres` on both.
+        Kind::Rudb => process::run(
+            Command::new(&server.binary).arg("init").args(["-U", "postgres"]).arg(&server.data),
+        )?,
     };
     let shared = root.join("oracle");
     copy(&shared.join("pg_hba.conf"), &server.data.join("pg_hba.conf"))?;
