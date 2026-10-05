@@ -1,0 +1,1 @@
+# The pgx tests that pass on the oracle and fail on rudb. A line is a test, then a tab and the rudb issue.

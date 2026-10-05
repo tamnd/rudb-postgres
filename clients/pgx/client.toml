@@ -1,0 +1,9 @@
+# The pgx driver for Go, per document 14 section 14.6 of the notes. A test name is the package
+# under github.com/jackc/pgx/v5 and the test, for example `pgconn TestConnect`.
+
+[client]
+repository = "https://github.com/jackc/pgx.git"
+tag = "v5.11.0"
+commit = "5e583fa7aabfa88b796292f849fc9d7d75ac159d"
+format = "go-json"
+strip = "github.com/jackc/pgx/v5/"

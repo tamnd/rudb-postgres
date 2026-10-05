@@ -1,0 +1,16 @@
+# The psycopg tests that fail on the oracle. A line is a test, then optionally a tab and a note.
+pq.test_escaping::test_escape_identifier_1char[off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+pq.test_escaping::test_escape_literal_1char[off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+pq.test_escaping::test_escape_string_1char[off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+test_sql::test_quote_roundtrip[off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+test_sql::test_quote_stable_despite_deranged_libpq[off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1byte[Binary-off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1byte[Binary-on]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1byte[bytearray-off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1byte[bytearray-on]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1byte[bytes-off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1byte[bytes-on]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1byte[memoryview-off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1byte[memoryview-on]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1char[off]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning
+types.test_string::test_quote_1char[on]	PostgreSQL 19 removed standard_conforming_strings = off and escape_string_warning

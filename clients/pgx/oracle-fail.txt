@@ -1,0 +1,6 @@
+# The pgx tests that fail on the oracle. A line is a test, then optionally a tab and a note.
+pgtype TestXMLCodec	the oracle is built without libxml, see oracle/build.sh
+pgtype TestXMLCodecDecodeValue	the oracle is built without libxml, see oracle/build.sh
+pgtype TestXMLCodecDecodeValue/select_'<foo>bar</foo>'::xml	the oracle is built without libxml, see oracle/build.sh
+pgtype TestXMLCodecPointerIndirection	the oracle is built without libxml, see oracle/build.sh
+pgtype TestXMLCodecPointerToPointerToString	the oracle is built without libxml, see oracle/build.sh
