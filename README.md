@@ -31,7 +31,7 @@ The build is a meson release build with no assertions. `oracle/build.sh` has the
 | `rudb-postgres client <name>` | Runs one client suite against both servers and applies its lists |
 | `rudb-postgres regress [--accept] [<test>...]` | Runs the core regression suite with `pg_regress` from the pin on both servers, and compares the diffs of rudb with `corpus/regress` |
 | `rudb-postgres isolation [--accept] [<spec>...]` | Runs the isolation specs with `pg_isolation_regress` from the pin on both servers, and compares the diffs of rudb with `corpus/isolation` |
-| `rudb-postgres report` | Writes the report page from the JSON files of one run |
+| `rudb-postgres report [--rudb [<commit>]] [--date <yyyy-mm-dd>]` | Reads the result files in `run/results` and counts the passed cases of each denominator of the notes. With `--rudb`, it writes the page of that rudb commit, or of the commit in `pins.toml`, to `reports/<date>/<commit>.md` and `.json`, and only counts the results that name rudb as the other server. Without it, it writes the page of the twin to `run/report`. The page gives the cases that changed state since the page before it |
 
 A command that is not written yet says so and exits with code 2.
 

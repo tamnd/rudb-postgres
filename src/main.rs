@@ -21,6 +21,7 @@ mod process;
 mod proxy;
 mod regress;
 mod replay;
+mod report;
 mod scram;
 mod servers;
 mod sql;
@@ -54,7 +55,11 @@ commands:
                         --accept writes the diffs of rudb to corpus/regress
   isolation [--accept] [<spec>...]
                         run the isolation specs with pg_isolation_regress on both servers
-  report                write the report page of one run
+  report [--rudb [<commit>]] [--date <yyyy-mm-dd>]
+                        count the passed cases of each denominator from run/results and
+                        write the page; with --rudb, the page of that rudb commit, or of the
+                        commit in pins.toml, goes to reports/<date>, and without it, the page
+                        of the twin goes to run/report
 ";
 
 /// The exit code for a command that is not written yet or that was called wrongly. It is not 1,
@@ -90,8 +95,8 @@ fn main() -> ExitCode {
             }
         },
         "down" => report(pins::root().and_then(|root| servers::down(&root))),
-        "connect" => match pins::root().and_then(|root| servers::load(&root)) {
-            Ok(servers) => differences(connect::run(&servers[0], &servers[1])),
+        "connect" => match connect_command() {
+            Ok(count) => differences(count),
             Err(error) => report(Err(error)),
         },
         "diff" => match diff_command(&args[1..]) {
@@ -117,7 +122,8 @@ fn main() -> ExitCode {
             Ok(count) => differences(count),
             Err(error) => report(Err(error)),
         },
-        "oracle" | "client" | "report" => {
+        "report" => report(report_command(&args[1..])),
+        "oracle" | "client" => {
             eprintln!("rudb-postgres {command}: not written yet, see tamnd/rudb#2488");
             ExitCode::from(NOT_WRITTEN)
         }
@@ -137,6 +143,51 @@ fn report(result: Result<(), String>) -> ExitCode {
             ExitCode::from(BROKEN)
         }
     }
+}
+
+/// Writes the report page.
+fn report_command(args: &[String]) -> Result<(), String> {
+    let root = pins::root()?;
+    let pins = pins::Pins::read(&root)?;
+    let mut options = report::Options::default();
+    let mut args = args.iter().peekable();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--rudb" => {
+                let commit = match args.next_if(|a| !a.starts_with("--")) {
+                    Some(commit) => commit.clone(),
+                    None => pins.rudb.clone(),
+                };
+                if commit.len() < 8 || !commit.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Err(format!("{commit:?} is not a commit hash"));
+                }
+                options.rudb = Some(commit);
+            }
+            "--date" => options.date = Some(args.next().ok_or("--date needs a value")?.clone()),
+            other => return Err(format!("unknown option {other:?}")),
+        }
+    }
+    let (json, markdown) = report::run(&root, &pins, &options)?;
+    println!("{}\n{}", json.display(), markdown.display());
+    Ok(())
+}
+
+/// Runs the connect matrix and writes `run/results/connect.json`.
+fn connect_command() -> Result<usize, String> {
+    let root = pins::root()?;
+    let servers = servers::load(&root)?;
+    let (count, json) = connect::run(&servers[0], &servers[1]);
+    write_result(&root, "connect", &json)?;
+    Ok(count)
+}
+
+/// Writes `run/results/<name>.json`, which the report reads.
+fn write_result(root: &std::path::Path, name: &str, json: &json::Json) -> Result<(), String> {
+    let dir = root.join("run").join("results");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let path = dir.join(format!("{name}.json"));
+    std::fs::write(&path, json.pretty())
+        .map_err(|e| format!("cannot write {}: {e}", path.display()))
 }
 
 /// Runs `diff` on each file and writes `run/results/diff.json`.
@@ -160,11 +211,7 @@ fn diff_command(args: &[String]) -> Result<usize, String> {
         total += count;
         results.push(json);
     }
-    let dir = root.join("run").join("results");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    let path = dir.join("diff.json");
-    std::fs::write(&path, json::Json::Array(results).pretty())
-        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    write_result(&root, "diff", &json::Json::Array(results))?;
     Ok(total)
 }
 
@@ -188,11 +235,7 @@ fn gen_command(args: &[String]) -> Result<usize, String> {
     let root = pins::root()?;
     let servers = servers::load(&root)?;
     let (count, json) = generate::run(&root, &servers[0], &servers[1], &options)?;
-    let dir = root.join("run").join("results");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    let path = dir.join("gen.json");
-    std::fs::write(&path, json.pretty())
-        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    write_result(&root, "gen", &json)?;
     Ok(count)
 }
 
@@ -239,11 +282,12 @@ fn replay_command(files: &[String]) -> Result<usize, String> {
         total += count;
         results.push(json);
     }
-    let dir = root.join("run").join("results");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    let path = dir.join("replay.json");
-    std::fs::write(&path, json::Json::Array(results).pretty())
-        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    let json = json::Json::object(vec![
+        ("oracle", json::Json::str(&servers[0].name)),
+        ("other", json::Json::str(&servers[1].name)),
+        ("traces", json::Json::Array(results)),
+    ]);
+    write_result(&root, "replay", &json)?;
     Ok(total)
 }
 
@@ -261,11 +305,7 @@ fn regress_command(suite: &regress::Suite, args: &[String]) -> Result<usize, Str
     let prefix = oracle::installed(&root, &pins::Pins::read(&root)?)?;
     let servers = servers::load(&root)?;
     let (count, json) = regress::run(&root, &prefix, suite, &servers[0], &servers[1], &options)?;
-    let dir = root.join("run").join("results");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    let path = dir.join(format!("{}.json", suite.name));
-    std::fs::write(&path, json.pretty())
-        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    write_result(&root, suite.name, &json)?;
     Ok(count)
 }
 

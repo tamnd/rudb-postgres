@@ -53,7 +53,7 @@ pub(crate) fn run(
 ) -> Result<(usize, Json), String> {
     println!("seed {}", options.seed);
     let mut rng = Rng::new(options.seed);
-    let functions = functions(oracle)?;
+    let (functions, catalog) = functions(oracle)?;
     let schema = schema(&mut rng);
 
     let mut file = String::new();
@@ -61,6 +61,7 @@ pub(crate) fn run(
     file.push_str("set statement_timeout = '10s';\n");
     let values = write_values(&mut file);
     let calls = write_calls(&mut file, &functions, &mut rng);
+    let call_count = calls.len();
     file.push_str("\n-- The schema of the queries.\n");
     for statement in &schema {
         let _ = writeln!(file, "{statement};");
@@ -75,12 +76,40 @@ pub(crate) fn run(
     let path: PathBuf = dir.join(format!("seed-{}.sql", options.seed));
     std::fs::write(&path, &file).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     println!(
-        "{} values, {calls} calls of {} functions, {} queries",
+        "{} values, {call_count} calls of {} functions, {} queries",
         values,
         functions.len(),
         options.count
     );
     let (differ, diff_json) = diff::run(&path, oracle, other, &diff::Options { rpg: false })?;
+    let differing: std::collections::HashSet<usize> = diff_json
+        .get("results")
+        .map_or(&[][..], Json::items)
+        .iter()
+        .filter(|r| r.get("outcome").and_then(Json::as_str) != Some("same"))
+        .filter_map(|r| r.get("line").and_then(Json::as_i64))
+        .map(|line| line as usize)
+        .collect();
+    let mut per_function = vec![(0, 0); functions.len()];
+    for (line, index) in &calls {
+        per_function[*index].0 += 1;
+        if differing.contains(line) {
+            per_function[*index].1 += 1;
+        }
+    }
+    let function_json: Vec<Json> = functions
+        .iter()
+        .zip(&per_function)
+        .map(|(f, (calls, differ))| {
+            Json::object(vec![
+                ("oid", Json::Number(f.oid)),
+                ("name", Json::str(&f.name)),
+                ("args", Json::str(&f.args.join(" "))),
+                ("calls", Json::Number(*calls)),
+                ("differ", Json::Number(*differ)),
+            ])
+        })
+        .collect();
 
     let checks = checks(&mut rng, options.count);
     let mut failed = 0;
@@ -93,10 +122,13 @@ pub(crate) fn run(
 
     let json = Json::object(vec![
         ("seed", Json::String(options.seed.to_string())),
+        ("oracle", Json::str(&oracle.name)),
+        ("other", Json::str(&other.name)),
         ("file", Json::String(path.display().to_string())),
         ("values", Json::Number(values as i64)),
-        ("calls", Json::Number(calls as i64)),
-        ("functions", Json::Number(functions.len() as i64)),
+        ("calls", Json::Number(call_count as i64)),
+        ("catalog_functions", Json::Number(catalog as i64)),
+        ("functions", Json::Array(function_json)),
         ("queries", Json::Number(options.count as i64)),
         ("diff", diff_json),
         ("logic", Json::Array(logic)),
@@ -338,6 +370,7 @@ fn write_values(file: &mut String) -> usize {
 /// A function of `pg_catalog` that the generator calls.
 #[derive(Debug)]
 struct Function {
+    oid: i64,
     name: String,
     args: Vec<String>,
     set: bool,
@@ -345,8 +378,9 @@ struct Function {
 }
 
 /// Reads the immutable functions and aggregates of `pg_catalog` from the oracle, with the
-/// names of their argument types.
-fn functions(oracle: &Server) -> Result<Vec<Function>, String> {
+/// names of their argument types, and the number of rows of `pg_proc.dat`, which have the OIDs
+/// below 10000.
+fn functions(oracle: &Server) -> Result<(Vec<Function>, usize), String> {
     let sql = "\
 select p.oid, p.proname, p.proretset, p.provariadic <> 0,
        coalesce((select string_agg(t.typname, ' ' order by u.n)
@@ -362,12 +396,21 @@ order by p.oid";
     if let Some(error) = reply.iter().find(|f| f.tag == b'E') {
         return Err(format!("{}: {}", oracle.name, client::error_text(error)));
     }
+    let reply_total = admin
+        .simple("select count(*) from pg_proc where oid < 10000")
+        .map_err(|e| format!("{}: {e}", oracle.name))?;
+    let total = client::rows(&reply_total)
+        .first()
+        .and_then(|row| row.first().cloned().flatten())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0);
     let mut functions = Vec::new();
     for row in client::rows(&reply) {
         let text = |i: usize| row.get(i).cloned().flatten().unwrap_or_default();
         let args: Vec<String> = text(4).split_whitespace().map(str::to_string).collect();
         if args.iter().all(|a| values(a).is_some()) {
             functions.push(Function {
+                oid: text(0).parse().unwrap_or(0),
                 name: text(1),
                 args,
                 set: text(2) == "t",
@@ -375,14 +418,16 @@ order by p.oid";
             });
         }
     }
-    Ok(functions)
+    Ok((functions, total))
 }
 
-/// Writes the calls and returns their number.
-fn write_calls(file: &mut String, functions: &[Function], rng: &mut Rng) -> usize {
-    let mut count = 0;
+/// Writes the calls and returns the line of each call and the index of its function.
+fn write_calls(file: &mut String, functions: &[Function], rng: &mut Rng) -> Vec<(usize, usize)> {
+    let mut calls = Vec::new();
+    let mut line = file.bytes().filter(|b| *b == b'\n').count() + 1;
     file.push_str("\n-- Calls to the immutable functions and aggregates of pg_catalog.\n");
-    for f in functions {
+    line += 2;
+    for (index, f) in functions.iter().enumerate() {
         let mut seen: Vec<String> = Vec::new();
         for call in 0..CALLS {
             let args: Vec<String> = f
@@ -411,10 +456,11 @@ fn write_calls(file: &mut String, functions: &[Function], rng: &mut Rng) -> usiz
             let name = f.name.replace('"', "\"\"");
             let _ = writeln!(file, "select pg_catalog.\"{name}\"({args}){limit};");
             seen.push(args);
-            count += 1;
+            calls.push((line, index));
+            line += 1;
         }
     }
-    count
+    calls
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -894,7 +940,27 @@ fn must(client: &mut Client, server: &Server, sql: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Rng, VALUES, query, schema};
+    use super::{Function, Rng, VALUES, query, schema, write_calls};
+
+    #[test]
+    fn each_call_is_on_the_line_that_write_calls_gives() {
+        let function = |oid, name: &str, args: &[&str]| Function {
+            oid,
+            name: name.to_string(),
+            args: args.iter().map(|a| a.to_string()).collect(),
+            set: false,
+            variadic: false,
+        };
+        let functions = vec![function(1, "abs", &["int4"]), function(2, "pi", &[])];
+        let mut file = "-- a header\nselect 1;\n".to_string();
+        let calls = write_calls(&mut file, &functions, &mut Rng::new(1));
+        let lines: Vec<&str> = file.lines().collect();
+        assert!(calls.len() >= 2 && calls.iter().filter(|(_, i)| *i == 1).count() == 1);
+        for (line, index) in calls {
+            let name = &functions[index].name;
+            assert!(lines[line - 1].starts_with(&format!("select pg_catalog.\"{name}\"(")));
+        }
+    }
 
     #[test]
     fn the_same_seed_gives_the_same_statements() {

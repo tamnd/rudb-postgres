@@ -9,6 +9,8 @@ pub(crate) struct Pins {
     pub(crate) postgres_repository: String,
     pub(crate) postgres: String,
     pub(crate) postgres_describe: String,
+    /// The rudb commit of the report page when `report --rudb` has no commit.
+    pub(crate) rudb: String,
 }
 
 impl Pins {
@@ -24,12 +26,12 @@ impl Pins {
                 .ok_or_else(|| format!("pins.toml has no [{name}] section"))
         };
         let postgres = section("postgres")?;
-        // The [rudb] section is read by the report, which is not written yet.
-        section("rudb")?;
+        let rudb = section("rudb")?;
         let pins = Pins {
             postgres_repository: postgres.require("pins.toml", "repository")?.to_string(),
             postgres: postgres.require("pins.toml", "commit")?.to_string(),
             postgres_describe: postgres.require("pins.toml", "describe")?.to_string(),
+            rudb: rudb.require("pins.toml", "commit")?.to_string(),
         };
         if pins.postgres.len() != 40 || !pins.postgres.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(format!(
