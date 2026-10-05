@@ -16,6 +16,7 @@ mod frame;
 mod generate;
 mod json;
 mod oracle;
+mod perf;
 mod pins;
 mod process;
 mod proxy;
@@ -58,6 +59,11 @@ commands:
                         --accept writes the diffs of rudb to corpus/regress
   isolation [--accept] [<spec>...]
                         run the isolation specs with pg_isolation_regress on both servers
+  perf [--seconds <n>] [--idle <n>]
+                        measure the SELECT 1 floor, the connection rate with trust and
+                        with SCRAM, and the memory of an idle session on both servers;
+                        each timed row runs n seconds on each server, and the memory row
+                        opens up to n idle sessions
   report [--rudb [<commit>]] [--date <yyyy-mm-dd>]
                         count the passed cases of each denominator from run/results and
                         write the page; with --rudb, the page of that rudb commit, or of the
@@ -126,6 +132,7 @@ fn main() -> ExitCode {
             Err(error) => report(Err(error)),
         },
         "report" => report(report_command(&args[1..])),
+        "perf" => report(perf_command(&args[1..])),
         "client" => match client_command(&args[1..]) {
             Ok(count) => differences(count),
             Err(error) => report(Err(error)),
@@ -202,6 +209,29 @@ fn client_command(args: &[String]) -> Result<usize, String> {
         count += n;
     }
     Ok(count)
+}
+
+/// Runs the performance rows and writes `run/results/perf.json`.
+fn perf_command(args: &[String]) -> Result<(), String> {
+    let mut options = perf::Options::default();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        let value = args.next().ok_or(format!("{arg} needs a number"))?;
+        match arg.as_str() {
+            "--seconds" => {
+                options.seconds =
+                    value.parse().map_err(|_| format!("{value:?} is not a number"))?;
+            }
+            "--idle" => {
+                options.idle = value.parse().map_err(|_| format!("{value:?} is not a number"))?;
+            }
+            other => return Err(format!("unknown option {other:?}")),
+        }
+    }
+    let root = pins::root()?;
+    let servers = servers::load(&root)?;
+    let json = perf::run(&servers[0], &servers[1], &options)?;
+    write_result(&root, "perf", &json)
 }
 
 /// Runs the connect matrix and writes `run/results/connect.json`.
