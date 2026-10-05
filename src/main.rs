@@ -12,6 +12,7 @@ mod compare;
 mod connect;
 mod crypto;
 mod diff;
+mod drivers;
 mod frame;
 mod generate;
 mod json;
@@ -59,6 +60,9 @@ commands:
                         --accept writes the diffs of rudb to corpus/regress
   isolation [--accept] [<spec>...]
                         run the isolation specs with pg_isolation_regress on both servers
+  drivers [<name>...]   run the smoke script of each client in drivers/, or of the named
+                        clients, against both servers; each one connects over TLS with
+                        SCRAM and runs SELECT 1
   perf [--seconds <n>] [--idle <n>]
                         measure the SELECT 1 floor, the connection rate with trust and
                         with SCRAM, and the memory of an idle session on both servers;
@@ -133,6 +137,10 @@ fn main() -> ExitCode {
         },
         "report" => report(report_command(&args[1..])),
         "perf" => report(perf_command(&args[1..])),
+        "drivers" => match drivers_command(&args[1..]) {
+            Ok(count) => differences(count),
+            Err(error) => report(Err(error)),
+        },
         "client" => match client_command(&args[1..]) {
             Ok(count) => differences(count),
             Err(error) => report(Err(error)),
@@ -232,6 +240,19 @@ fn perf_command(args: &[String]) -> Result<(), String> {
     let servers = servers::load(&root)?;
     let json = perf::run(&servers[0], &servers[1], &options)?;
     write_result(&root, "perf", &json)
+}
+
+/// Runs the driver gate and writes `run/results/drivers.json`.
+fn drivers_command(args: &[String]) -> Result<usize, String> {
+    if let Some(option) = args.iter().find(|a| a.starts_with("--")) {
+        return Err(format!("unknown option {option:?}"));
+    }
+    let root = pins::root()?;
+    let names = if args.is_empty() { drivers::names(&root)? } else { args.to_vec() };
+    let servers = servers::load(&root)?;
+    let (count, json) = drivers::run(&root, &names, &servers[0], &servers[1]);
+    write_result(&root, "drivers", &json)?;
+    Ok(count)
 }
 
 /// Runs the connect matrix and writes `run/results/connect.json`.

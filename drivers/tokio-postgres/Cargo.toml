@@ -1,0 +1,15 @@
+[package]
+name = "tokio-postgres-smoke"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Its own workspace, so that the harness build does not take it in.
+[workspace]
+
+[dependencies]
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1", features = ["std"] }
+tokio = { version = "1", features = ["macros", "rt"] }
+tokio-postgres = "0.7"
+tokio-postgres-rustls = "0.13"
