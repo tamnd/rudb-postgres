@@ -17,11 +17,14 @@ mod json;
 mod oracle;
 mod pins;
 mod process;
+mod proxy;
 mod regress;
+mod replay;
 mod scram;
 mod servers;
 mod sql;
 mod toml;
+mod trace;
 
 const USAGE: &str = "\
 usage: rudb-postgres <command> [options]
@@ -33,8 +36,11 @@ commands:
                         other server is rudb, or a second oracle without --rudb
   down                  stop the servers that up started
   connect               log in to both servers each way and compare the replies
-  record --to <server>  start the proxy in front of a server and write a trace per session
-  replay <trace>        replay a trace against both servers and compare the replies
+  record --to <server> [--port <n>] [--name <name>] [--sessions <n>] [--regress]
+                        start the proxy on port n in front of a server and write a trace
+                        per session to run/traces/<name>-<i>.trace; --sessions stops after
+                        n sessions, and --regress writes the regress style of libpq
+  replay <trace>...     replay each trace against both servers and compare the replies
   diff [--rpg] <file.sql>...
                         run each statement on both servers in three modes and compare
                         the answers; --rpg runs as rpg over tcp, not as the superuser
@@ -96,7 +102,15 @@ fn main() -> ExitCode {
                 Err(error) => report(Err(error)),
             }
         }
-        "oracle" | "record" | "replay" | "gen" | "client" | "report" => {
+        "record" => match record_command(&args[1..]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => report(Err(error)),
+        },
+        "replay" => match replay_command(&args[1..]) {
+            Ok(count) => differences(count),
+            Err(error) => report(Err(error)),
+        },
+        "oracle" | "gen" | "client" | "report" => {
             eprintln!("rudb-postgres {command}: not written yet, see tamnd/rudb#2488");
             ExitCode::from(NOT_WRITTEN)
         }
@@ -142,6 +156,57 @@ fn diff_command(args: &[String]) -> Result<usize, String> {
     let dir = root.join("run").join("results");
     std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     let path = dir.join("diff.json");
+    std::fs::write(&path, json::Json::Array(results).pretty())
+        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    Ok(total)
+}
+
+/// Runs the recording proxy until it has recorded the sessions, or until it is stopped.
+fn record_command(args: &[String]) -> Result<(), String> {
+    let mut options = proxy::Options::default();
+    let mut to = None;
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        let mut value = |what: &str| args.next().cloned().ok_or(format!("{arg} needs {what}"));
+        match arg.as_str() {
+            "--to" => to = Some(value("a server name")?),
+            "--name" => options.name = value("a name")?,
+            "--port" => {
+                let port = value("a number")?;
+                options.port = port.parse().map_err(|_| format!("{port:?} is not a port"))?;
+            }
+            "--sessions" => {
+                let n = value("a number")?;
+                options.sessions = Some(n.parse().map_err(|_| format!("{n:?} is not a number"))?);
+            }
+            "--regress" => options.style = trace::Style::Regress,
+            other => return Err(format!("unknown option {other:?}")),
+        }
+    }
+    let to = to.ok_or("record needs --to <server>")?;
+    let root = pins::root()?;
+    let servers = servers::load(&root)?;
+    let server = servers.iter().find(|s| s.name == to).ok_or(format!("no server {to:?} is up"))?;
+    proxy::record(&root, server, &options)
+}
+
+/// Replays each trace and writes `run/results/replay.json`.
+fn replay_command(files: &[String]) -> Result<usize, String> {
+    if files.is_empty() {
+        return Err("replay needs at least one trace".to_string());
+    }
+    let root = pins::root()?;
+    let servers = servers::load(&root)?;
+    let mut total = 0;
+    let mut results = Vec::new();
+    for file in files {
+        let (count, json) = replay::run(std::path::Path::new(file), &servers[0], &servers[1])?;
+        total += count;
+        results.push(json);
+    }
+    let dir = root.join("run").join("results");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let path = dir.join("replay.json");
     std::fs::write(&path, json::Json::Array(results).pretty())
         .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     Ok(total)

@@ -248,6 +248,14 @@ impl Client {
         self.stream.flush()
     }
 
+    /// Changes how long the client waits for one frame.
+    pub(crate) fn set_timeout(&mut self, timeout: Duration) -> io::Result<()> {
+        match &self.stream {
+            Stream::Tcp(s) => s.set_read_timeout(Some(timeout)),
+            Stream::Unix(s) => s.set_read_timeout(Some(timeout)),
+        }
+    }
+
     pub(crate) fn read(&mut self) -> io::Result<Frame> {
         frame::read(&mut self.stream)
     }

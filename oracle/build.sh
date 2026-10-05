@@ -56,12 +56,15 @@ mkdir -p "$prefix/test/bin"
 for program in \
   src/test/regress/pg_regress \
   src/test/isolation/isolationtester \
-  src/test/isolation/pg_isolation_regress \
-  src/test/modules/libpq_pipeline/libpq_pipeline; do
+  src/test/isolation/pg_isolation_regress; do
   cp "$build/$program" "$prefix/test/bin/"
 done
-# The build tree gives each test program a search path to ../../interfaces/libpq, relative to the
-# program. From test/bin that is the prefix itself, so a link there finds the installed libpq.
+mkdir -p "$prefix/test/pipeline/bin"
+cp "$build/src/test/modules/libpq_pipeline/libpq_pipeline" "$prefix/test/pipeline/bin/"
+# The build tree gives each test program a search path to libpq relative to the program:
+# ../../interfaces/libpq for the programs in test/bin, and ../../../interfaces/libpq for
+# libpq_pipeline, which is one level deeper in the tree. From test/bin and test/pipeline/bin both
+# are the prefix itself, so a link there finds the installed libpq.
 mkdir -p "$prefix/interfaces/libpq"
 find "$prefix/lib" \( -name 'libpq.so*' -o -name 'libpq.*dylib' \) -exec ln -sf {} "$prefix/interfaces/libpq/" \;
 for module in "$build"/src/test/regress/regress.*; do

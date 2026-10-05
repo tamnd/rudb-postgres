@@ -1,0 +1,91 @@
+F	39	StartupMessage	 3 0 "user" "postgres" "database" "replay"
+B	23	AuthenticationSASL	 "SCRAM-SHA-256" ""
+F	54	SASLInitialResponse	 "SCRAM-SHA-256" 32 'n,,n=,r=eIkmztbM/qzsqmUS09dvTrsy'
+B	92	AuthenticationSASLContinue	 'r=eIkmztbM/qzsqmUS09dvTrsy1LN5coElKv4r/b5J/0Q6xWmR,s=CoU6vdcRmrZE2KL64k64gg==,i=4096'
+F	108	SASLResponse	 'c=biws,r=eIkmztbM/qzsqmUS09dvTrsy1LN5coElKv4r/b5J/0Q6xWmR,p=lpZDaqXRAqQUIjY7YtjKE4xWw3AgZyKfLPokNZu5rB0='
+B	54	AuthenticationSASLFinal	 'v=hH6KTO2lbQML6Q6Pos5i6Jq206agQgAuvK5RtbIYJIM='
+B	8	AuthenticationOk
+B	27	ParameterStatus	 "IntervalStyle" "postgres"
+B	32	ParameterStatus	 "search_path" "\x22$user\x22, public"
+B	20	ParameterStatus	 "is_superuser" "on"
+B	35	ParameterStatus	 "standard_conforming_strings" "on"
+B	35	ParameterStatus	 "session_authorization" "postgres"
+B	25	ParameterStatus	 "client_encoding" "UTF8"
+B	27	ParameterStatus	 "server_version" "19beta4"
+B	25	ParameterStatus	 "server_encoding" "UTF8"
+B	23	ParameterStatus	 "in_hot_standby" "off"
+B	25	ParameterStatus	 "integer_datetimes" "on"
+B	17	ParameterStatus	 "TimeZone" "UTC"
+B	22	ParameterStatus	 "application_name" ""
+B	38	ParameterStatus	 "default_transaction_read_only" "off"
+B	26	ParameterStatus	 "scram_iterations" "4096"
+B	23	ParameterStatus	 "DateStyle" "ISO, MDY"
+B	12	BackendKeyData	 98011 '\xd2>\x8f\x92'
+B	5	ReadyForQuery	 I
+F	27	Query	 "SET lc_messages TO \x22C\x22"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	35	Query	 "SET debug_parallel_query = off"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	79	Query	 "DROP TABLE IF EXISTS pq_pipeline_tst;CREATE TABLE pq_pipeline_tst (id int)"
+B	122	NoticeResponse	 S "NOTICE" V "NOTICE" C "00000" M "table \x22pq_pipeline_tst\x22 does not exist, skipping" F "tablecmds.c" L "1528" R "DropErrorMsgNonExistent" \x00
+B	15	CommandComplete	 "DROP TABLE"
+B	17	CommandComplete	 "CREATE TABLE"
+B	5	ReadyForQuery	 I
+F	24	Parse	 "rollback" "ROLLBACK" 0
+F	13	Parse	 "" "BEGIN" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	18	Parse	 "" "SELECT 0/0" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	22	Bind	 "" "rollback" 0 0 1 1
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	46	Parse	 "" "INSERT INTO pq_pipeline_tst VALUES (1)" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Sync
+F	46	Parse	 "" "INSERT INTO pq_pipeline_tst VALUES (2)" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Sync
+F	22	Bind	 "" "rollback" 0 0 1 1
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	46	Parse	 "" "INSERT INTO pq_pipeline_tst VALUES (3)" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Sync
+F	4	Sync
+B	4	ParseComplete
+B	4	ParseComplete
+B	4	BindComplete
+B	4	NoData
+B	10	CommandComplete	 "BEGIN"
+B	4	ParseComplete
+B	65	ErrorResponse	 S "ERROR" V "ERROR" C "22012" M "division by zero" F "int.c" L "872" R "int4div" \x00
+B	5	ReadyForQuery	 E
+B	145	ErrorResponse	 S "ERROR" V "ERROR" C "25P02" M "current transaction is aborted, commands ignored until end of transaction block" F "postgres.c" L "1512" R "exec_parse_message" \x00
+B	5	ReadyForQuery	 E
+B	4	BindComplete
+B	4	NoData
+B	13	CommandComplete	 "ROLLBACK"
+B	4	ParseComplete
+B	4	BindComplete
+B	4	NoData
+B	15	CommandComplete	 "INSERT 0 1"
+B	5	ReadyForQuery	 I
+B	5	ReadyForQuery	 I
+F	34	Query	 "SELECT * FROM pq_pipeline_tst"
+B	27	RowDescription	 1 "id" 137023 1 23 4 -1 0
+B	11	DataRow	 1 1 '3'
+B	13	CommandComplete	 "SELECT 1"
+B	5	ReadyForQuery	 I
+F	4	Terminate

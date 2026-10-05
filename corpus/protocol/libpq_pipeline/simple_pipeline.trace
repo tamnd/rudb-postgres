@@ -1,0 +1,42 @@
+F	39	StartupMessage	 3 0 "user" "postgres" "database" "replay"
+B	23	AuthenticationSASL	 "SCRAM-SHA-256" ""
+F	54	SASLInitialResponse	 "SCRAM-SHA-256" 32 'n,,n=,r=3AnqoPeiSj9oL2FIqdRVDYxe'
+B	92	AuthenticationSASLContinue	 'r=3AnqoPeiSj9oL2FIqdRVDYxehXZS/RQTu8KvyFC0Mm+5hpXt,s=CoU6vdcRmrZE2KL64k64gg==,i=4096'
+F	108	SASLResponse	 'c=biws,r=3AnqoPeiSj9oL2FIqdRVDYxehXZS/RQTu8KvyFC0Mm+5hpXt,p=0JIbnrkOXHY6leITyCoeMnzVzeearb5qkqZSfXtY3ww='
+B	54	AuthenticationSASLFinal	 'v=U9T1UnxOBbyIGmYJufIu6TntNS2MW1VRFPTXnZYjFcA='
+B	8	AuthenticationOk
+B	27	ParameterStatus	 "IntervalStyle" "postgres"
+B	32	ParameterStatus	 "search_path" "\x22$user\x22, public"
+B	20	ParameterStatus	 "is_superuser" "on"
+B	35	ParameterStatus	 "standard_conforming_strings" "on"
+B	35	ParameterStatus	 "session_authorization" "postgres"
+B	25	ParameterStatus	 "client_encoding" "UTF8"
+B	27	ParameterStatus	 "server_version" "19beta4"
+B	25	ParameterStatus	 "server_encoding" "UTF8"
+B	23	ParameterStatus	 "in_hot_standby" "off"
+B	25	ParameterStatus	 "integer_datetimes" "on"
+B	17	ParameterStatus	 "TimeZone" "UTC"
+B	22	ParameterStatus	 "application_name" ""
+B	38	ParameterStatus	 "default_transaction_read_only" "off"
+B	26	ParameterStatus	 "scram_iterations" "4096"
+B	23	ParameterStatus	 "DateStyle" "ISO, MDY"
+B	12	BackendKeyData	 97966 'K\xff\xe2\xed'
+B	5	ReadyForQuery	 I
+F	27	Query	 "SET lc_messages TO \x22C\x22"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	35	Query	 "SET debug_parallel_query = off"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	21	Parse	 "" "SELECT $1" 1 23
+F	19	Bind	 "" "" 0 1 1 '1' 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Sync
+B	4	ParseComplete
+B	4	BindComplete
+B	33	RowDescription	 1 "?column?" 0 0 23 4 -1 0
+B	11	DataRow	 1 1 '1'
+B	13	CommandComplete	 "SELECT 1"
+B	5	ReadyForQuery	 I
+F	4	Terminate
