@@ -1,0 +1,119 @@
+{
+  "date": "2026-10-05",
+  "pins": {
+    "rudb": "cd9f9676fde33e34e119d99db714ccf140605dff",
+    "other": "rudb",
+    "postgres": "7d3d2db7d5e533fa42a4202c7d308cbb0cbf9333",
+    "postgres_describe": "19beta4",
+    "configuration": "3674006940aaf653",
+    "machine": "Darwin arm64, 10 threads",
+    "client_suites": []
+  },
+  "rows": [
+    {
+      "level": "L1",
+      "denominator": "Protocol cases",
+      "run": false,
+      "passed": 0,
+      "total": "plan",
+      "failed": []
+    },
+    {
+      "level": "L1",
+      "denominator": "Connect matrix",
+      "run": false,
+      "passed": 0,
+      "total": 14,
+      "failed": []
+    },
+    {
+      "level": "L2",
+      "denominator": "Catalog corpus",
+      "run": false,
+      "passed": 0,
+      "total": "plan",
+      "failed": []
+    },
+    {
+      "level": "L2",
+      "denominator": "Catalog shape",
+      "run": false,
+      "passed": 0,
+      "total": "64 catalogs, 86 views, 65 `information_schema` views",
+      "failed": []
+    },
+    {
+      "level": "L3",
+      "denominator": "Regression suite, strict",
+      "run": false,
+      "passed": 0,
+      "total": 239,
+      "failed": []
+    },
+    {
+      "level": "L3",
+      "denominator": "Regression suite, statements",
+      "run": false,
+      "passed": 0,
+      "total": "plan",
+      "failed": []
+    },
+    {
+      "level": "L3",
+      "denominator": "Differential corpus",
+      "run": false,
+      "passed": 0,
+      "total": "plan",
+      "failed": []
+    },
+    {
+      "level": "L3",
+      "denominator": "Function coverage",
+      "run": false,
+      "passed": 0,
+      "total": 3414,
+      "failed": []
+    },
+    {
+      "level": "L4",
+      "denominator": "Isolation specs",
+      "run": false,
+      "passed": 0,
+      "total": 133,
+      "failed": []
+    },
+    {
+      "level": "L4",
+      "denominator": "Hermitage cases",
+      "run": false,
+      "passed": 0,
+      "total": "plan",
+      "failed": []
+    },
+    {
+      "level": "L4",
+      "denominator": "Error corpus",
+      "run": false,
+      "passed": 0,
+      "total": 7112,
+      "failed": []
+    },
+    {
+      "level": "L4",
+      "denominator": "Settings",
+      "run": false,
+      "passed": 0,
+      "total": 438,
+      "failed": []
+    },
+    {
+      "level": "L5",
+      "denominator": "Upstream suites",
+      "run": false,
+      "passed": 0,
+      "total": 14,
+      "failed": []
+    }
+  ],
+  "logic": null
+}

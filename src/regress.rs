@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::client::{Client, Login};
 use crate::json::Json;
 use crate::servers::{Kind, Server};
 
@@ -188,6 +189,8 @@ fn drive(
     }
     std::fs::create_dir_all(&out).map_err(|e| format!("cannot create {}: {e}", out.display()))?;
 
+    clean(server);
+
     let mut command = Command::new(prefix.join("test").join("bin").join(suite.program));
     command
         .arg(format!("--inputdir={}", input.display()))
@@ -234,6 +237,20 @@ fn drive(
         Err(_) => BTreeMap::new(),
     };
     Ok(Run { outcomes, diffs })
+}
+
+/// Drops what an earlier run that stopped early can leave in the cluster. The driver drops the
+/// database `regression` itself, but the tablespace of `test_setup` is not in a database, and only
+/// the test `tablespace` near the end of the schedule drops it. This is best effort: a server that
+/// refuses the statements fails the tests that need them, and the run shows that.
+fn clean(server: &Server) {
+    let Ok(mut admin) = Client::connect(server, &Login::superuser("postgres")) else { return };
+    for sql in [
+        "DROP DATABASE IF EXISTS regression WITH (FORCE)",
+        "DROP TABLESPACE IF EXISTS regress_tblspace",
+    ] {
+        let _ = admin.simple(sql);
+    }
 }
 
 /// Reads the TAP lines of the driver: `ok 2 + boolean 118 ms` or `not ok 7 - int4 90 ms`. A `+`

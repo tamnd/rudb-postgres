@@ -8,6 +8,7 @@
 
 use crate::client::{Client, Login, Transport};
 use crate::compare::{self, Difference};
+use crate::json::Json;
 use crate::servers::Server;
 
 #[derive(Debug)]
@@ -43,10 +44,12 @@ fn cases() -> Vec<Case> {
     ]
 }
 
-/// Runs every case and prints one line per case. Returns the number of cases that differ.
-pub(crate) fn run(oracle: &Server, other: &Server) -> usize {
+/// Runs every case and prints one line per case. Returns the number of cases that differ, and
+/// the result JSON.
+pub(crate) fn run(oracle: &Server, other: &Server) -> (usize, Json) {
     println!("{:<26} {:<12} {:<12} result", "case", oracle.name, other.name);
     let mut differing = 0;
+    let mut results = Vec::new();
     for case in cases() {
         let (a, a_frames) = attempt(oracle, &case.login);
         let (b, b_frames) = attempt(other, &case.login);
@@ -59,6 +62,12 @@ pub(crate) fn run(oracle: &Server, other: &Server) -> usize {
             b,
             if same { "same" } else { "DIFFERENT" }
         );
+        results.push(Json::object(vec![
+            ("case", Json::str(case.name)),
+            ("oracle", Json::str(&a)),
+            ("other", Json::str(&b)),
+            ("same", Json::Bool(same)),
+        ]));
         if !same {
             differing += 1;
             if a != b {
@@ -72,7 +81,12 @@ pub(crate) fn run(oracle: &Server, other: &Server) -> usize {
             }
         }
     }
-    differing
+    let json = Json::object(vec![
+        ("oracle", Json::str(&oracle.name)),
+        ("other", Json::str(&other.name)),
+        ("cases", Json::Array(results)),
+    ]);
+    (differing, json)
 }
 
 /// Logs in and returns a short result and the frames to compare: the startup frames and the

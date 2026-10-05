@@ -104,6 +104,10 @@ jobs:
       # Each run takes a new seed, and the output gives it, so a run that fails can be made again.
       - name: the generated statements give the same answers on the oracle and its twin
         run: cargo run -q --release -- gen --seed ${{ github.run_id }} --count 1000
+      - name: the report page of the run goes to the job summary
+        run: |
+          cargo run -q --release -- report
+          cat run/report/report.md >> "$GITHUB_STEP_SUMMARY"
       - name: stop them
         run: cargo run -q --release -- down
       - name: keep the server logs
