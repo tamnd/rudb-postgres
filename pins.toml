@@ -1,0 +1,13 @@
+# The commits that every number in this repository is taken against. A pin moves in its own
+# commit, and the commit message gives the change in each number that the move caused.
+
+[postgres]
+repository = "https://github.com/postgres/postgres.git"
+branch = "REL_19_STABLE"
+commit = "7d3d2db7d5e533fa42a4202c7d308cbb0cbf9333"
+describe = "19beta4"
+
+# The default rudb commit for a run. `--rudb` overrides it.
+[rudb]
+repository = "https://github.com/tamnd/rudb.git"
+commit = "cd9f9676fde33e34e119d99db714ccf140605dff"

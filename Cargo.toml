@@ -1,0 +1,32 @@
+# Not published. This is a harness. It starts PostgreSQL and rudb as servers and compares what a
+# client sees from each, and nobody should depend on it from a build.
+[package]
+name = "rudb-postgres"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85.0"
+license = "Apache-2.0"
+repository = "https://github.com/tamnd/rudb-postgres"
+description = "The PostgreSQL compatibility harness for rudb."
+publish = false
+
+# No dependencies, on purpose. The harness reads the bytes of two servers and compares them, so
+# everything between the socket and the comparison is code in this repository that a person can
+# read. It must not link any rudb crate, because a bug in rudb's codec could then hide itself.
+[dependencies]
+
+[lints.rust]
+missing_debug_implementations = "warn"
+rust_2018_idioms = "warn"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "warn"
+doc_markdown = "allow"
+missing_panics_doc = "warn"
+todo = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

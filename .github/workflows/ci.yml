@@ -1,0 +1,63 @@
+# The per-commit gate. Every job here is required to merge.
+#
+# Actions are pinned to a patch version, so that a run can be reproduced.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  quick:
+    name: format and lints
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: Swatinem/rust-cache@v2.9.2
+      - name: cargo fmt
+        run: cargo fmt --all --check
+      - name: cargo clippy
+        run: cargo clippy --all-targets --all-features
+
+  test:
+    name: test on ${{ matrix.os }}
+    needs: quick
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: Swatinem/rust-cache@v2.9.2
+      - name: cargo test
+        run: cargo test --all-features
+      - name: the command line answers
+        run: cargo run -q -- help
+
+  ci:
+    name: ci
+    if: always()
+    needs: [quick, test]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: fail if anything upstream failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: pass
+        run: echo "all required jobs succeeded"
