@@ -1,6 +1,6 @@
 //! JSON for the result files. The commands write it, and the report reads it back. The reader
-//! takes the JSON that the writer makes and standard JSON in general, except that a number must
-//! be an integer.
+//! takes the JSON that the writer makes and standard JSON in general. A number with a fraction or
+//! an exponent is a float, as in the output of `go test -json`.
 
 use std::fmt::Write as _;
 
@@ -9,6 +9,7 @@ pub(crate) enum Json {
     Null,
     Bool(bool),
     Number(i64),
+    Float(f64),
     String(String),
     Array(Vec<Json>),
     Object(Vec<(String, Json)>),
@@ -37,6 +38,9 @@ impl Json {
             Json::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
             Json::Number(n) => {
                 let _ = write!(out, "{n}");
+            }
+            Json::Float(n) => {
+                let _ = write!(out, "{n:?}");
             }
             Json::String(s) => quote(out, s),
             Json::Array(items) if items.is_empty() => out.push_str("[]"),
@@ -198,13 +202,25 @@ impl Reader<'_> {
             Some(b'-' | b'0'..=b'9') => {
                 let start = self.at;
                 self.at += 1;
-                while self.bytes.get(self.at).is_some_and(u8::is_ascii_digit) {
+                let mut float = false;
+                while let Some(b) = self.bytes.get(self.at) {
+                    match b {
+                        b'0'..=b'9' => {}
+                        b'.' | b'e' | b'E' | b'+' | b'-' => float = true,
+                        _ => break,
+                    }
                     self.at += 1;
                 }
                 let text = std::str::from_utf8(&self.bytes[start..self.at]).unwrap_or("");
-                text.parse()
-                    .map(Json::Number)
-                    .map_err(|_| self.error("a number that is not an integer"))
+                if float {
+                    text.parse()
+                        .map(Json::Float)
+                        .map_err(|_| self.error("a number that does not read"))
+                } else {
+                    text.parse()
+                        .map(Json::Number)
+                        .map_err(|_| self.error("a number that does not read"))
+                }
             }
             _ => Err(self.error("no value")),
         }
@@ -306,7 +322,9 @@ mod tests {
         assert_eq!(back.get("a").map(|a| a.items().len()), Some(3));
         assert_eq!(parse("\"\\ud83d\\ude00\"").unwrap().as_str(), Some("\u{1f600}"));
         assert!(parse("[1,]").is_err());
-        assert!(parse("1.5").is_err());
+        assert!(matches!(parse("1.5e2").unwrap(), Json::Float(n) if n == 150.0));
+        assert_eq!(parse("{\"Elapsed\":0.01}").unwrap().pretty(), "{\n  \"Elapsed\": 0.01\n}\n");
+        assert!(parse("1.2.3").is_err());
     }
 
     #[test]

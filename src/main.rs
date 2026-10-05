@@ -27,6 +27,7 @@ mod servers;
 mod sql;
 mod toml;
 mod trace;
+mod upstream;
 
 const USAGE: &str = "\
 usage: rudb-postgres <command> [options]
@@ -49,7 +50,9 @@ commands:
   gen [--seed <n>] [--count <n>]
                         generate values, function calls and random queries from a seed,
                         run them through diff, and run the logic checks on each server
-  client <name>         run one client suite against both servers
+  client [--accept] [<name>...]
+                        run the test suite of each client in clients/, or of the named
+                        clients, against both servers; --accept writes the failure lists
   regress [--accept] [<test>...]
                         run the core regression suite with pg_regress on both servers;
                         --accept writes the diffs of rudb to corpus/regress
@@ -123,7 +126,11 @@ fn main() -> ExitCode {
             Err(error) => report(Err(error)),
         },
         "report" => report(report_command(&args[1..])),
-        "oracle" | "client" => {
+        "client" => match client_command(&args[1..]) {
+            Ok(count) => differences(count),
+            Err(error) => report(Err(error)),
+        },
+        "oracle" => {
             eprintln!("rudb-postgres {command}: not written yet, see tamnd/rudb#2488");
             ExitCode::from(NOT_WRITTEN)
         }
@@ -170,6 +177,31 @@ fn report_command(args: &[String]) -> Result<(), String> {
     let (json, markdown) = report::run(&root, &pins, &options)?;
     println!("{}\n{}", json.display(), markdown.display());
     Ok(())
+}
+
+/// Runs the suite of each client and writes `run/results/client-<name>.json`.
+fn client_command(args: &[String]) -> Result<usize, String> {
+    let mut options = upstream::Options::default();
+    let mut names = Vec::new();
+    for arg in args {
+        match arg.as_str() {
+            "--accept" => options.accept = true,
+            other if other.starts_with("--") => return Err(format!("unknown option {other:?}")),
+            name => names.push(name.to_string()),
+        }
+    }
+    let root = pins::root()?;
+    if names.is_empty() {
+        names = upstream::names(&root)?;
+    }
+    let servers = servers::load(&root)?;
+    let mut count = 0;
+    for name in &names {
+        let (n, json) = upstream::run(&root, name, &servers[0], &servers[1], &options)?;
+        write_result(&root, &format!("client-{name}"), &json)?;
+        count += n;
+    }
+    Ok(count)
 }
 
 /// Runs the connect matrix and writes `run/results/connect.json`.

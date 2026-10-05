@@ -28,12 +28,21 @@ The build is a meson release build with no assertions. `oracle/build.sh` has the
 | `rudb-postgres replay <trace>...` | Replays each trace against both servers in a new database and compares the replies step by step. It maps each recorded user OID to the OID of each server, and sends a recorded cancel with the key of its own session |
 | `rudb-postgres diff <file.sql>` | Runs each statement on both servers, in the simple query and in the extended query with text and binary results, and compares the answers |
 | `rudb-postgres gen [--seed <n>] [--count <n>]` | Generates a file from a seed: the edge values of each type under each output setting, calls to each immutable function of `pg_catalog` with edge values, and random queries over three tables. It runs the file through `diff`, then runs TLP and NoREC logic checks on each server alone. Without `--seed`, the seed comes from the clock and the output gives it |
-| `rudb-postgres client <name>` | Runs one client suite against both servers and applies its lists |
+| `rudb-postgres client [--accept] [<name>...]` | Runs the test suite of each client in `clients`, or of the named clients, on both servers. The checkout of the pinned tag goes to `target/clients`. A test that fails on the oracle must be in `oracle-fail.txt`, and a test that passes on the oracle and fails on rudb must be in `expected-fail.txt`. Any other failure, and any pass of a listed test, is a difference. `--accept` writes the two lists |
 | `rudb-postgres regress [--accept] [<test>...]` | Runs the core regression suite with `pg_regress` from the pin on both servers, and compares the diffs of rudb with `corpus/regress` |
 | `rudb-postgres isolation [--accept] [<spec>...]` | Runs the isolation specs with `pg_isolation_regress` from the pin on both servers, and compares the diffs of rudb with `corpus/isolation` |
 | `rudb-postgres report [--rudb [<commit>]] [--date <yyyy-mm-dd>]` | Reads the result files in `run/results` and counts the passed cases of each denominator of the notes. With `--rudb`, it writes the page of that rudb commit, or of the commit in `pins.toml`, to `reports/<date>/<commit>.md` and `.json`, and only counts the results that name rudb as the other server. Without it, it writes the page of the twin to `run/report`. The page gives the cases that changed state since the page before it |
 
 A command that is not written yet says so and exits with code 2.
+
+## Client suites
+
+Each directory in `clients` pins one client at a tag and its commit in `client.toml`. `run.sh` runs the suite of the client in its checkout, and finds the server in the `PG` variables that the harness sets. `setup.sql` makes the objects that the suite expects in its new database. The suite of pgx needs Go, and the suite of psycopg needs uv.
+
+| Client | Tag | Tests that pass on the oracle | Why the others fail on the oracle |
+| --- | --- | ---: | --- |
+| pgx | v5.11.0 | 2458 of 2463 | The oracle is built without libxml |
+| psycopg | 3.3.6 | 5089 of 5104 | PostgreSQL 19 removed `standard_conforming_strings = off` and `escape_string_warning` |
 
 ## How to reproduce a difference
 

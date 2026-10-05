@@ -1,0 +1,9 @@
+# The psycopg 3 driver for Python, per document 14 section 14.6 of the notes. A test name is the
+# module under tests and the test, for example `test_cursor::test_execute_many`.
+
+[client]
+repository = "https://github.com/psycopg/psycopg.git"
+tag = "3.3.6"
+commit = "a67654d1e7afbf9b3a619557838f62de1c790e7c"
+format = "junit"
+strip = "tests."

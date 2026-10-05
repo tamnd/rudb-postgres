@@ -66,7 +66,8 @@ pub(crate) fn run(
             .unwrap_or_else(|| "twin".to_string()),
     };
     let results = Results { dir: root.join("run").join("results"), other: other.clone() };
-    let rows = rows(&results)?;
+    let clients = results.clients()?;
+    let rows = rows(&results, &clients)?;
     let date = options.date.clone().unwrap_or_else(today);
     let (dir, stem) = match &options.rudb {
         Some(commit) => {
@@ -88,12 +89,28 @@ pub(crate) fn run(
         ("postgres_describe", Json::str(&pins.postgres_describe)),
         ("configuration", Json::str(&configuration(root)?)),
         ("machine", Json::str(&machine())),
-        ("client_suites", Json::Array(Vec::new())),
+        (
+            "client_suites",
+            Json::Array(
+                clients
+                    .iter()
+                    .map(|c| {
+                        let field = |key| c.get(key).cloned().unwrap_or(Json::Null);
+                        Json::object(vec![
+                            ("client", field("client")),
+                            ("tag", field("tag")),
+                            ("commit", field("commit")),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
     ]);
     let page = Json::object(vec![
         ("date", Json::str(&date)),
         ("pins", pins_json.clone()),
         ("rows", Json::Array(rows.iter().map(row_json).collect())),
+        ("clients", Json::Array(clients.iter().map(client_json).collect())),
         ("logic", results.read("gen")?.and_then(|g| logic(&g, &other)).unwrap_or(Json::Null)),
     ]);
     let markdown = markdown(&date, &pins_json, &rows, &page, previous.as_ref());
@@ -128,9 +145,25 @@ impl Results {
     fn against(&self, name: &str) -> Result<Option<Json>, String> {
         Ok(self.read(name)?.filter(|j| j.get("other").and_then(Json::as_str) == Some(&self.other)))
     }
+
+    /// The `client-<name>.json` files that name the other server, by client name.
+    fn clients(&self) -> Result<Vec<Json>, String> {
+        let Ok(entries) = std::fs::read_dir(&self.dir) else { return Ok(Vec::new()) };
+        let mut names: Vec<String> = entries
+            .flatten()
+            .filter_map(|e| e.file_name().to_str().map(str::to_string))
+            .filter_map(|n| n.strip_prefix("client-")?.strip_suffix(".json").map(str::to_string))
+            .collect();
+        names.sort();
+        let mut clients = Vec::new();
+        for name in names {
+            clients.extend(self.against(&format!("client-{name}"))?);
+        }
+        Ok(clients)
+    }
 }
 
-fn rows(results: &Results) -> Result<Vec<Row>, String> {
+fn rows(results: &Results, clients: &[Json]) -> Result<Vec<Row>, String> {
     let row = |level, name, total, run| Row { level, name, total, run };
     Ok(vec![
         row("L1", "Protocol cases", Total::Plan, protocol(results)?),
@@ -150,8 +183,70 @@ fn rows(results: &Results) -> Result<Vec<Row>, String> {
         row("L4", "Hermitage cases", Total::Plan, None),
         row("L4", "Error corpus", Total::Count(7112), None),
         row("L4", "Settings", Total::Count(438), None),
-        row("L5", "Upstream suites", Total::Count(14), None),
+        row("L5", "Upstream suites", Total::Count(CLIENTS), upstream(clients)),
     ])
+}
+
+/// The clients of the first matrix in document 14 section 14.6.
+const CLIENTS: usize = 14;
+
+/// The tests of one client that passed on the oracle and on the other server.
+fn client_counts(client: &Json) -> (usize, usize) {
+    let servers = client.get("servers").map_or(&[][..], Json::items);
+    let passed = |i: usize| {
+        servers.get(i).and_then(|s| s.get("passed")).and_then(Json::as_i64).unwrap_or(0) as usize
+    };
+    (passed(0), passed(1))
+}
+
+/// A client passes when its L5 number is 100 percent: each test that passed on the oracle
+/// passed on the other server. A client of the matrix without a suite counts as failed.
+fn upstream(clients: &[Json]) -> Option<Run> {
+    if clients.is_empty() {
+        return None;
+    }
+    let mut failed = Vec::new();
+    for client in clients {
+        let (oracle, other) = client_counts(client);
+        if oracle == 0 || other < oracle {
+            let name = client.get("client").and_then(Json::as_str).unwrap_or("?");
+            failed.push(format!("client/{name}"));
+        }
+    }
+    Some(Run { passed: clients.len() - failed.len(), total: CLIENTS, failed })
+}
+
+fn client_json(client: &Json) -> Json {
+    let (oracle, other) = client_counts(client);
+    let field = |key| client.get(key).cloned().unwrap_or(Json::Null);
+    let total = client
+        .get("servers")
+        .and_then(|s| s.items().first())
+        .and_then(|s| s.get("total"))
+        .cloned()
+        .unwrap_or(Json::Null);
+    Json::object(vec![
+        ("client", field("client")),
+        ("tag", field("tag")),
+        ("oracle_passed", Json::Number(oracle as i64)),
+        ("oracle_total", total),
+        ("passed", Json::Number(other as i64)),
+        ("oracle_fail", field("oracle_fail")),
+        ("expected_fail", field("expected_fail")),
+    ])
+}
+
+/// The L5 number of a client, the passes on the other server over the passes on the oracle.
+fn l5(oracle: i64, other: i64) -> String {
+    if oracle == 0 {
+        return "no test passed on the oracle".to_string();
+    }
+    if other == oracle {
+        return "100 percent".to_string();
+    }
+    // Round down, so that a client below 100 percent never shows 100.0.
+    let tenths = other * 1000 / oracle;
+    format!("{}.{} percent", tenths / 10, tenths % 10)
 }
 
 /// The connect matrix of the harness and the replayed traces.
@@ -344,7 +439,18 @@ fn markdown(date: &str, pins: &Json, rows: &[Row], page: &Json, previous: Option
             .unwrap_or("none, the other server is a second copy of the oracle")
     );
     let _ = writeln!(out, "| PostgreSQL | {} at {} |", get("postgres_describe"), get("postgres"));
-    out.push_str("| Client suites | none pinned yet |\n");
+    let suites: Vec<String> = pins
+        .get("client_suites")
+        .map_or(&[][..], Json::items)
+        .iter()
+        .map(|c| {
+            let field = |key| c.get(key).and_then(Json::as_str).unwrap_or("?");
+            let short: String = field("commit").chars().take(8).collect();
+            format!("{} {} at `{short}`", field("client"), field("tag"))
+        })
+        .collect();
+    let suites = if suites.is_empty() { "none ran".to_string() } else { suites.join(", ") };
+    let _ = writeln!(out, "| Client suites | {suites} |");
     let _ = writeln!(out, "| Configuration | `{}` |", get("configuration"));
     let _ = writeln!(out, "| Machine | {} |\n", get("machine"));
 
@@ -379,9 +485,40 @@ fn markdown(date: &str, pins: &Json, rows: &[Row], page: &Json, previous: Option
     out.push_str("\nA denominator that did not run counts each of its cases as failed. ");
     out.push_str("No case is removed by the items of document 01 section 1.6 yet, so each row has 0 cases not counted.\n\n");
 
-    out.push_str(
-        "## Clients\n\nNo client suite is pinned yet, so this page has no client rows.\n\n",
-    );
+    out.push_str("## Clients\n\n");
+    let clients = page.get("clients").map_or(&[][..], Json::items);
+    if clients.is_empty() {
+        out.push_str(
+            "No client suite ran against this server, so this page has no client rows.\n\n",
+        );
+    } else {
+        let _ = writeln!(
+            out,
+            "| Client | Tag | Oracle | {other} | L5 | Through PgBouncer | oracle-fail.txt | expected-fail.txt |"
+        );
+        out.push_str("| --- | --- | ---: | ---: | --- | --- | ---: | ---: |\n");
+        for client in clients {
+            let text = |key| client.get(key).and_then(Json::as_str).unwrap_or("?");
+            let n = |key| client.get(key).and_then(Json::as_i64).unwrap_or(0);
+            let _ = writeln!(
+                out,
+                "| {} | {} | {} of {} | {} | {} | not run | {} | {} |",
+                text("client"),
+                text("tag"),
+                n("oracle_passed"),
+                n("oracle_total"),
+                n("passed"),
+                l5(n("oracle_passed"), n("passed")),
+                n("oracle_fail"),
+                n("expected_fail")
+            );
+        }
+        let _ = writeln!(
+            out,
+            "\nThe L5 number of a client is its tests that passed on {other} over its tests that passed on the oracle. A client is drop-in when this number is 100 percent and the two other conditions of document 01 section 1.4 hold. The harness does not check those two conditions yet. {} of the {CLIENTS} clients of the first matrix have no suite in `clients` yet.\n",
+            CLIENTS.saturating_sub(clients.len())
+        );
+    }
     out.push_str("## Resources\n\nThe harness does not measure the server processes yet.\n\n");
 
     match page.get("logic") {
@@ -511,7 +648,7 @@ fn civil(days: i64) -> (i64, i64, i64) {
 
 #[cfg(test)]
 mod tests {
-    use super::{civil, count};
+    use super::{civil, count, l5};
 
     #[test]
     fn day_numbers_become_dates() {
@@ -526,5 +663,13 @@ mod tests {
         assert_eq!((run.passed, run.total), (1, 2));
         assert_eq!(run.failed, ["b"]);
         assert!(count(Vec::new()).is_none());
+    }
+
+    #[test]
+    fn the_l5_number_never_rounds_up_to_100() {
+        assert_eq!(l5(5089, 5089), "100 percent");
+        assert_eq!(l5(5089, 5088), "99.9 percent");
+        assert_eq!(l5(3, 2), "66.6 percent");
+        assert_eq!(l5(0, 0), "no test passed on the oracle");
     }
 }

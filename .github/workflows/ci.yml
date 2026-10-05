@@ -104,6 +104,13 @@ jobs:
       # Each run takes a new seed, and the output gives it, so a run that fails can be made again.
       - name: the generated statements give the same answers on the oracle and its twin
         run: cargo run -q --release -- gen --seed ${{ github.run_id }} --count 1000
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: the client suites pass on the twin wherever they pass on the oracle
+        run: cargo run -q --release -- client
       - name: the report page of the run goes to the job summary
         run: |
           cargo run -q --release -- report
