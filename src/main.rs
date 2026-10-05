@@ -7,9 +7,15 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+mod client;
+mod compare;
+mod connect;
+mod crypto;
+mod frame;
 mod oracle;
 mod pins;
 mod process;
+mod scram;
 mod servers;
 mod toml;
 
@@ -22,6 +28,7 @@ commands:
                         start the oracle on port n and the other server on n + 1; the
                         other server is rudb, or a second oracle without --rudb
   down                  stop the servers that up started
+  connect               log in to both servers each way and compare the replies
   record --to <server>  start the proxy in front of a server and write a trace per session
   replay <trace>        replay a trace against both servers and compare the replies
   diff <file.sql>       run each statement on both servers and compare the answers
@@ -65,6 +72,10 @@ fn main() -> ExitCode {
             }
         },
         "down" => report(pins::root().and_then(|root| servers::down(&root))),
+        "connect" => match pins::root().and_then(|root| servers::load(&root)) {
+            Ok(servers) => differences(connect::run(&servers[0], &servers[1])),
+            Err(error) => report(Err(error)),
+        },
         "oracle" | "record" | "replay" | "diff" | "gen" | "client" | "regress" | "isolation"
         | "report" => {
             eprintln!("rudb-postgres {command}: not written yet, see tamnd/rudb#2488");
@@ -85,6 +96,16 @@ fn report(result: Result<(), String>) -> ExitCode {
             eprintln!("rudb-postgres: {error}");
             ExitCode::from(BROKEN)
         }
+    }
+}
+
+/// Exit code 1 when something differs, so that a script can stop on it.
+fn differences(count: usize) -> ExitCode {
+    if count == 0 {
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("rudb-postgres: {count} cases differ");
+        ExitCode::FAILURE
     }
 }
 
