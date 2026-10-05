@@ -534,6 +534,29 @@ pub(crate) fn read(text: &[u8]) -> Result<Vec<Line>, String> {
     Ok(lines)
 }
 
+/// The values of a `DataRow` line in the exact style, with `None` for a null. It is `None` when
+/// the line is not a `DataRow` or does not read.
+pub(crate) fn data_row(line: &[u8]) -> Option<Vec<Option<Vec<u8>>>> {
+    let mut parts = line.strip_prefix(b"B\t")?.splitn(3, |b| *b == b'\t');
+    parts.next()?;
+    if parts.next()? != b"DataRow" {
+        return None;
+    }
+    let mut fields = Tokens::new(parts.next()?).ok()?;
+    let mut values = Vec::new();
+    for _ in 0..fields.number().ok()? {
+        let length = fields.number().ok()?;
+        if length < 0 {
+            values.push(None);
+        } else {
+            let mut value = Vec::new();
+            fields.nchar(&mut value, i32::try_from(length).ok()).ok()?;
+            values.push(Some(value));
+        }
+    }
+    fields.done().then_some(values)
+}
+
 /// Makes the bytes of a frontend message from its line without the `F` part.
 fn encode(line: &[u8]) -> Result<Vec<u8>, String> {
     let mut parts = line.splitn(3, |b| *b == b'\t');
@@ -892,6 +915,24 @@ mod tests {
             text,
             "F\t33\tUnknownAuthenticationResponse\nmismatched message length: consumed 4, expected 33"
         );
+    }
+
+    #[test]
+    fn a_data_row_line_gives_its_values() {
+        let mut body = 3i16.to_be_bytes().to_vec();
+        for value in [Some(&b"16384"[..]), None, Some(&b"it's"[..])] {
+            match value {
+                Some(v) => {
+                    body.extend_from_slice(&(v.len() as i32).to_be_bytes());
+                    body.extend_from_slice(v);
+                }
+                None => body.extend_from_slice(&(-1i32).to_be_bytes()),
+            }
+        }
+        let line = line(Style::Exact, false, b'D', &body);
+        let values = super::data_row(line.as_bytes()).unwrap();
+        assert_eq!(values, [Some(b"16384".to_vec()), None, Some(b"it's".to_vec())]);
+        assert!(super::data_row(b"B\t5\tReadyForQuery\t I").is_none());
     }
 
     #[test]

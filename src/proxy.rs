@@ -10,7 +10,13 @@
 //! The proxy has no TLS. It answers `SSLRequest` and `GSSENCRequest` with `N`, as a server
 //! without TLS does, so a client with `sslmode=prefer` continues without TLS. The cases for TLS
 //! and channel binding run without the proxy.
+//!
+//! A client sends a `CancelRequest` on a new connection. The proxy writes it to the trace of the
+//! session whose `BackendKeyData` has the same process ID and key, and not to a trace of its own,
+//! so that the replay sees the cancel at the place in the session where the client sent it. A
+//! cancel for a key that the proxy did not see gets its own trace, as before.
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -53,14 +59,16 @@ pub(crate) fn record(root: &Path, server: &Server, options: &Options) -> Result<
         server.port,
         dir.display()
     );
+    let keys: Keys = Arc::default();
     let mut sessions = Vec::new();
     for (i, client) in listener.incoming().enumerate() {
         let client = client.map_err(|e| format!("cannot accept a client: {e}"))?;
         let path = dir.join(format!("{}-{}.trace", options.name, i + 1));
         let port = server.port;
         let style = options.style;
+        let keys = Arc::clone(&keys);
         sessions.push(thread::spawn(move || {
-            if let Err(error) = session(client, port, &path, style) {
+            if let Err(error) = session(client, port, &path, style, &keys) {
                 eprintln!("{}: {error}", path.display());
             }
         }));
@@ -94,50 +102,86 @@ impl Trace {
     }
 }
 
-fn lock(trace: &Mutex<Trace>) -> std::sync::MutexGuard<'_, Trace> {
-    trace.lock().unwrap_or_else(|e| e.into_inner())
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn session(mut client: TcpStream, port: u16, path: &PathBuf, style: Style) -> io::Result<()> {
-    let trace =
-        Arc::new(Mutex::new(Trace { file: File::create(path)?, tracer: Tracer::new(style) }));
+/// The trace of each live session, by the body of its `BackendKeyData`: the process ID and the
+/// key, the same bytes that a `CancelRequest` carries after its code.
+type Keys = Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<Trace>>>>>;
+
+fn session(
+    mut client: TcpStream,
+    port: u16,
+    path: &PathBuf,
+    style: Style,
+    keys: &Keys,
+) -> io::Result<()> {
     // The messages without a type byte. The client can ask for TLS or GSS encryption before
-    // the startup, and the proxy refuses both.
+    // the startup, and the proxy refuses both. The lines wait in memory until the proxy knows
+    // which trace they go to.
+    let tracer = Tracer::new(style);
+    let mut lines = Vec::new();
     let (first, code) = loop {
         let message = frame::read_untagged(&mut client)?;
         let code = u32::from_be_bytes([message[4], message[5], message[6], message[7]]);
-        let mut t = lock(&trace);
-        let line = t.tracer.untagged(&message);
-        t.line(&line)?;
+        lines.push(tracer.untagged(&message));
         let name = match code {
             frame::SSL_REQUEST => "SSLResponse",
             frame::GSSENC_REQUEST => "GSSENCResponse",
             _ => break (message, code),
         };
         client.write_all(b"N")?;
-        let line = t.tracer.char_response(name, b'N');
-        t.line(&line)?;
+        lines.push(tracer.char_response(name, b'N'));
+    };
+
+    let target =
+        if code == frame::CANCEL_REQUEST { lock(keys).get(&first[8..]).cloned() } else { None };
+    let trace = match target {
+        Some(target) => {
+            // Only the cancel goes to the session. The requests for TLS before it are part of
+            // how this client connects, and not part of the session.
+            let line = lines.pop().unwrap_or_default();
+            lock(&target).line(&line)?;
+            None
+        }
+        None => {
+            let mut trace = Trace { file: File::create(path)?, tracer };
+            for line in &lines {
+                trace.line(line)?;
+            }
+            Some(Arc::new(Mutex::new(trace)))
+        }
     };
 
     let mut server = TcpStream::connect(("127.0.0.1", port))?;
     server.set_nodelay(true)?;
     client.set_nodelay(true)?;
     server.write_all(&first)?;
-    if code == frame::CANCEL_REQUEST {
+    let Some(trace) = trace.filter(|_| code != frame::CANCEL_REQUEST) else {
         // The server reads the key and closes the connection without an answer.
         return Ok(());
-    }
+    };
 
     let backend = {
         let trace = Arc::clone(&trace);
+        let keys = Arc::clone(keys);
         let mut from_server = server.try_clone()?;
         let mut to_client = client.try_clone()?;
         thread::spawn(move || -> io::Result<()> {
+            let mut key = None;
             while let Ok(frame) = frame::read(&mut from_server) {
                 lock(&trace).frame(false, &frame)?;
+                if frame.tag == b'K' {
+                    lock(&keys).insert(frame.body.clone(), Arc::clone(&trace));
+                    key = Some(frame.body.clone());
+                }
                 if to_client.write_all(&frame.bytes()).is_err() {
                     break;
                 }
+            }
+            if let Some(key) = key {
+                lock(&keys).remove(&key);
             }
             let _ = to_client.shutdown(Shutdown::Both);
             Ok(())

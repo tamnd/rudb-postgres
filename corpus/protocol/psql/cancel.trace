@@ -1,0 +1,30 @@
+F	63	StartupMessage	 3 0 "user" "postgres" "database" "postgres" "application_name" "psql"
+B	23	AuthenticationSASL	 "SCRAM-SHA-256" ""
+F	54	SASLInitialResponse	 "SCRAM-SHA-256" 32 'n,,n=,r=QMUJWUMa+4T2nzSUih5g/slw'
+B	92	AuthenticationSASLContinue	 'r=QMUJWUMa+4T2nzSUih5g/slwlBrULo0Y2HuYHeDsE9kZkWPo,s=CoU6vdcRmrZE2KL64k64gg==,i=4096'
+F	108	SASLResponse	 'c=biws,r=QMUJWUMa+4T2nzSUih5g/slwlBrULo0Y2HuYHeDsE9kZkWPo,p=abkCSn27H0makRLKwNr/UD6Uexq51ac7q5w17ANP2fc='
+B	54	AuthenticationSASLFinal	 'v=nTULVQaKJzlCUl30t2FHY82yLJI4AnuTSdIn+Q3V9o0='
+B	8	AuthenticationOk
+B	27	ParameterStatus	 "IntervalStyle" "postgres"
+B	32	ParameterStatus	 "search_path" "\x22$user\x22, public"
+B	20	ParameterStatus	 "is_superuser" "on"
+B	35	ParameterStatus	 "standard_conforming_strings" "on"
+B	35	ParameterStatus	 "session_authorization" "postgres"
+B	25	ParameterStatus	 "client_encoding" "UTF8"
+B	27	ParameterStatus	 "server_version" "19beta4"
+B	25	ParameterStatus	 "server_encoding" "UTF8"
+B	23	ParameterStatus	 "in_hot_standby" "off"
+B	25	ParameterStatus	 "integer_datetimes" "on"
+B	17	ParameterStatus	 "TimeZone" "UTC"
+B	26	ParameterStatus	 "application_name" "psql"
+B	38	ParameterStatus	 "default_transaction_read_only" "off"
+B	26	ParameterStatus	 "scram_iterations" "4096"
+B	23	ParameterStatus	 "DateStyle" "ISO, MDY"
+B	12	BackendKeyData	 65247 'Z\xb4\x17s'
+B	5	ReadyForQuery	 I
+F	23	Query	 "select pg_sleep(5)"
+F	16	CancelRequest	 1234 5678 65247 'Z\xb4\x17s'
+B	33	RowDescription	 1 "pg_sleep" 0 0 2278 4 -1 0
+B	104	ErrorResponse	 S "ERROR" V "ERROR" C "57014" M "canceling statement due to user request" F "postgres.c" L "3541" R "ProcessInterrupts" \x00
+B	5	ReadyForQuery	 I
+F	4	Terminate

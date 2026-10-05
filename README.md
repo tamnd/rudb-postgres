@@ -24,8 +24,8 @@ The build is a meson release build with no assertions. `oracle/build.sh` has the
 | `rudb-postgres up [--rudb <binary>]` | Starts the oracle and the other server, on two ports |
 | `rudb-postgres down` | Stops the servers that `up` started |
 | `rudb-postgres connect` | Logs in to both servers in each way and compares the replies |
-| `rudb-postgres record --to <server> [--port <n>] [--sessions <n>] [--regress]` | Starts the proxy on port 55440 in front of a server and writes a trace for each session to `run/traces`. The trace format is the format of libpq's `PQtrace`. The proxy has no TLS and answers `SSLRequest` with `N` |
-| `rudb-postgres replay <trace>...` | Replays each trace against both servers in a new database and compares the replies step by step |
+| `rudb-postgres record --to <server> [--port <n>] [--sessions <n>] [--regress]` | Starts the proxy on port 55440 in front of a server and writes a trace for each session to `run/traces`. The trace format is the format of libpq's `PQtrace`. The proxy has no TLS and answers `SSLRequest` with `N`. A `CancelRequest` goes to the trace of the session that it cancels |
+| `rudb-postgres replay <trace>...` | Replays each trace against both servers in a new database and compares the replies step by step. It maps each recorded user OID to the OID of each server, and sends a recorded cancel with the key of its own session |
 | `rudb-postgres diff <file.sql>` | Runs each statement on both servers, in the simple query and in the extended query with text and binary results, and compares the answers |
 | `rudb-postgres gen [--seed <n>] [--count <n>]` | Generates a file from a seed: the edge values of each type under each output setting, calls to each immutable function of `pg_catalog` with edge values, and random queries over three tables. It runs the file through `diff`, then runs TLP and NoREC logic checks on each server alone. Without `--seed`, the seed comes from the clock and the output gives it |
 | `rudb-postgres client <name>` | Runs one client suite against both servers and applies its lists |
