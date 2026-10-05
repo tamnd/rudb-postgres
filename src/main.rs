@@ -13,6 +13,7 @@ mod connect;
 mod crypto;
 mod diff;
 mod frame;
+mod generate;
 mod json;
 mod oracle;
 mod pins;
@@ -44,7 +45,9 @@ commands:
   diff [--rpg] <file.sql>...
                         run each statement on both servers in three modes and compare
                         the answers; --rpg runs as rpg over tcp, not as the superuser
-  gen                   generate statements and run them through diff
+  gen [--seed <n>] [--count <n>]
+                        generate values, function calls and random queries from a seed,
+                        run them through diff, and run the logic checks on each server
   client <name>         run one client suite against both servers
   regress [--accept] [<test>...]
                         run the core regression suite with pg_regress on both servers;
@@ -110,7 +113,11 @@ fn main() -> ExitCode {
             Ok(count) => differences(count),
             Err(error) => report(Err(error)),
         },
-        "oracle" | "gen" | "client" | "report" => {
+        "gen" => match gen_command(&args[1..]) {
+            Ok(count) => differences(count),
+            Err(error) => report(Err(error)),
+        },
+        "oracle" | "client" | "report" => {
             eprintln!("rudb-postgres {command}: not written yet, see tamnd/rudb#2488");
             ExitCode::from(NOT_WRITTEN)
         }
@@ -159,6 +166,34 @@ fn diff_command(args: &[String]) -> Result<usize, String> {
     std::fs::write(&path, json::Json::Array(results).pretty())
         .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     Ok(total)
+}
+
+/// Runs the generator and writes `run/results/gen.json`. Without `--seed`, the seed comes from
+/// the clock, and the output gives it, so that a run can be made again.
+fn gen_command(args: &[String]) -> Result<usize, String> {
+    let seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(1, |d| d.as_secs());
+    let mut options = generate::Options { seed, count: 200 };
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        let value = args.next().ok_or(format!("{arg} needs a number"))?;
+        let number = value.parse().map_err(|_| format!("{value:?} is not a number"))?;
+        match arg.as_str() {
+            "--seed" => options.seed = number,
+            "--count" => options.count = number as usize,
+            other => return Err(format!("unknown option {other:?}")),
+        }
+    }
+    let root = pins::root()?;
+    let servers = servers::load(&root)?;
+    let (count, json) = generate::run(&root, &servers[0], &servers[1], &options)?;
+    let dir = root.join("run").join("results");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let path = dir.join("gen.json");
+    std::fs::write(&path, json.pretty())
+        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+    Ok(count)
 }
 
 /// Runs the recording proxy until it has recorded the sessions, or until it is stopped.

@@ -27,7 +27,7 @@ The build is a meson release build with no assertions. `oracle/build.sh` has the
 | `rudb-postgres record --to <server> [--port <n>] [--sessions <n>] [--regress]` | Starts the proxy on port 55440 in front of a server and writes a trace for each session to `run/traces`. The trace format is the format of libpq's `PQtrace`. The proxy has no TLS and answers `SSLRequest` with `N` |
 | `rudb-postgres replay <trace>...` | Replays each trace against both servers in a new database and compares the replies step by step |
 | `rudb-postgres diff <file.sql>` | Runs each statement on both servers, in the simple query and in the extended query with text and binary results, and compares the answers |
-| `rudb-postgres gen --seed <n> --count <n>` | Generates statements and runs them through `diff` |
+| `rudb-postgres gen [--seed <n>] [--count <n>]` | Generates a file from a seed: the edge values of each type under each output setting, calls to each immutable function of `pg_catalog` with edge values, and random queries over three tables. It runs the file through `diff`, then runs TLP and NoREC logic checks on each server alone. Without `--seed`, the seed comes from the clock and the output gives it |
 | `rudb-postgres client <name>` | Runs one client suite against both servers and applies its lists |
 | `rudb-postgres regress [--accept] [<test>...]` | Runs the core regression suite with `pg_regress` from the pin on both servers, and compares the diffs of rudb with `corpus/regress` |
 | `rudb-postgres isolation [--accept] [<spec>...]` | Runs the isolation specs with `pg_isolation_regress` from the pin on both servers, and compares the diffs of rudb with `corpus/isolation` |
