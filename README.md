@@ -23,6 +23,7 @@ The build is a meson release build with no assertions. `oracle/build.sh` has the
 | `rudb-postgres oracle build` | Builds PostgreSQL from the pin into `target/oracle/<pin>` |
 | `rudb-postgres up [--rudb <binary>]` | Starts the oracle and the other server, on two ports |
 | `rudb-postgres down` | Stops the servers that `up` started |
+| `rudb-postgres connect` | Logs in to both servers in each way and compares the replies |
 | `rudb-postgres record --to <server>` | Starts the proxy in front of a server and writes a trace for each session |
 | `rudb-postgres replay <trace>` | Replays a trace against both servers and compares the replies |
 | `rudb-postgres diff <file.sql>` | Runs each statement on both servers and compares the answers |
