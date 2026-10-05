@@ -4,14 +4,23 @@
 //! that is not in an expected list. The design is document 14 of the PostgreSQL compatibility
 //! notes, and the layout of this crate follows its section 14.2.
 
+use std::path::PathBuf;
 use std::process::ExitCode;
+
+mod oracle;
+mod pins;
+mod process;
+mod servers;
+mod toml;
 
 const USAGE: &str = "\
 usage: rudb-postgres <command> [options]
 
 commands:
   oracle build          build PostgreSQL from the pin into target/oracle/<pin>
-  up [--rudb <binary>]  start the oracle and the other server, on two ports
+  up [--rudb <binary>] [--port <n>] [--fresh]
+                        start the oracle on port n and the other server on n + 1; the
+                        other server is rudb, or a second oracle without --rudb
   down                  stop the servers that up started
   record --to <server>  start the proxy in front of a server and write a trace per session
   replay <trace>        replay a trace against both servers and compare the replies
@@ -23,9 +32,13 @@ commands:
   report                write the report page of one run
 ";
 
-/// The exit code for a command that is not written yet. It is not 1, so that a script can tell
-/// a missing command from a difference.
+/// The exit code for a command that is not written yet or that was called wrongly. It is not 1,
+/// so that a script can tell a missing command from a difference.
 const NOT_WRITTEN: u8 = 2;
+
+/// The exit code for a harness that could not do its job, for example when the oracle is not
+/// built. A run that ends here has no result at all.
+const BROKEN: u8 = 3;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -38,8 +51,22 @@ fn main() -> ExitCode {
             print!("{USAGE}");
             ExitCode::SUCCESS
         }
-        "oracle" | "up" | "down" | "record" | "replay" | "diff" | "gen" | "client" | "regress"
-        | "isolation" | "report" => {
+        "oracle" if args.get(1).map(String::as_str) == Some("build") => {
+            report(pins::root().and_then(|root| oracle::build(&root, &pins::Pins::read(&root)?)))
+        }
+        "up" => match up_options(&args[1..]) {
+            Ok(options) => report(
+                pins::root()
+                    .and_then(|root| servers::up(&root, &pins::Pins::read(&root)?, &options)),
+            ),
+            Err(error) => {
+                eprintln!("rudb-postgres up: {error}");
+                ExitCode::from(NOT_WRITTEN)
+            }
+        },
+        "down" => report(pins::root().and_then(|root| servers::down(&root))),
+        "oracle" | "record" | "replay" | "diff" | "gen" | "client" | "regress" | "isolation"
+        | "report" => {
             eprintln!("rudb-postgres {command}: not written yet, see tamnd/rudb#2488");
             ExitCode::from(NOT_WRITTEN)
         }
@@ -49,4 +76,33 @@ fn main() -> ExitCode {
             ExitCode::from(NOT_WRITTEN)
         }
     }
+}
+
+fn report(result: Result<(), String>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("rudb-postgres: {error}");
+            ExitCode::from(BROKEN)
+        }
+    }
+}
+
+fn up_options(args: &[String]) -> Result<servers::UpOptions, String> {
+    let mut options = servers::UpOptions::default();
+    let mut args = args.iter();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--rudb" => {
+                options.rudb = Some(PathBuf::from(args.next().ok_or("--rudb needs a binary")?))
+            }
+            "--port" => {
+                let port = args.next().ok_or("--port needs a number")?;
+                options.port = Some(port.parse().map_err(|_| format!("{port:?} is not a port"))?);
+            }
+            "--fresh" => options.fresh = true,
+            other => return Err(format!("unknown option {other:?}")),
+        }
+    }
+    Ok(options)
 }
