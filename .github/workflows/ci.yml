@@ -99,8 +99,8 @@ jobs:
             diff -u "$pipeline/traces/$test.trace" "run/libpq-$test.trace"
             tail -n "$(wc -l < "run/libpq-$test.trace")" "run/traces/regress-$test-1.trace" | diff -u "run/libpq-$test.trace" -
           done
-      - name: the libpq_pipeline sessions replay the same on the oracle and its twin
-        run: cargo run -q --release -- replay corpus/protocol/libpq_pipeline/*.trace
+      - name: the recorded sessions replay the same on the oracle and its twin
+        run: cargo run -q --release -- replay corpus/protocol/*/*.trace
       # Each run takes a new seed, and the output gives it, so a run that fails can be made again.
       - name: the generated statements give the same answers on the oracle and its twin
         run: cargo run -q --release -- gen --seed ${{ github.run_id }} --count 1000

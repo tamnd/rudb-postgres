@@ -1,0 +1,78 @@
+F	63	StartupMessage	 3 0 "user" "postgres" "database" "postgres" "application_name" "psql"
+B	23	AuthenticationSASL	 "SCRAM-SHA-256" ""
+F	54	SASLInitialResponse	 "SCRAM-SHA-256" 32 'n,,n=,r=PqewszpCDqPgGCZVN8eTeE1X'
+B	92	AuthenticationSASLContinue	 'r=PqewszpCDqPgGCZVN8eTeE1XdyhLMPo0im24XYjdVzYw4a89,s=CoU6vdcRmrZE2KL64k64gg==,i=4096'
+F	108	SASLResponse	 'c=biws,r=PqewszpCDqPgGCZVN8eTeE1XdyhLMPo0im24XYjdVzYw4a89,p=4e7BBeVTH4pNgS/aN8XanCVyu9alQ2zigspWMnWsiHU='
+B	54	AuthenticationSASLFinal	 'v=LC2dMGSfQaHJfAyHdYMaXs5yX+gzDFoo5RMSWkAvNoM='
+B	8	AuthenticationOk
+B	27	ParameterStatus	 "IntervalStyle" "postgres"
+B	32	ParameterStatus	 "search_path" "\x22$user\x22, public"
+B	20	ParameterStatus	 "is_superuser" "on"
+B	35	ParameterStatus	 "standard_conforming_strings" "on"
+B	35	ParameterStatus	 "session_authorization" "postgres"
+B	25	ParameterStatus	 "client_encoding" "UTF8"
+B	27	ParameterStatus	 "server_version" "19beta4"
+B	25	ParameterStatus	 "server_encoding" "UTF8"
+B	23	ParameterStatus	 "in_hot_standby" "off"
+B	25	ParameterStatus	 "integer_datetimes" "on"
+B	17	ParameterStatus	 "TimeZone" "UTC"
+B	26	ParameterStatus	 "application_name" "psql"
+B	38	ParameterStatus	 "default_transaction_read_only" "off"
+B	26	ParameterStatus	 "scram_iterations" "4096"
+B	23	ParameterStatus	 "DateStyle" "ISO, MDY"
+B	12	BackendKeyData	 65224 'vm\x08;'
+B	5	ReadyForQuery	 I
+F	29	Query	 "create table rp_t(a int)"
+B	17	CommandComplete	 "CREATE TABLE"
+B	5	ReadyForQuery	 I
+F	314	Query	 "/* Get matching relations to describe */\x0aSELECT c.oid,\x0a  n.nspname,\x0a  c.relname\x0aFROM pg_catalog.pg_class c\x0a     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace\x0aWHERE c.relname OPERATOR(pg_catalog.~) '^(rp_t)$' COLLATE pg_catalog.default\x0a  AND pg_catalog.pg_table_is_visible(c.oid)\x0aORDER BY 2, 3;"
+B	80	RowDescription	 3 "oid" 1259 1 26 4 -1 0 "nspname" 2615 2 19 64 -1 0 "relname" 1259 2 19 64 -1 0
+B	34	DataRow	 3 6 '231189' 6 'public' 4 'rp_t'
+B	13	CommandComplete	 "SELECT 1"
+B	5	ReadyForQuery	 I
+F	537	Query	 "/* Get general information about one relation */\x0aSELECT c.relchecks, c.relkind, c.relhasindex, c.relhasrules, c.relhastriggers, c.relrowsecurity, c.relforcerowsecurity, false AS relhasoids, c.relispartition, '', c.reltablespace, CASE WHEN c.reloftype = 0 THEN '' ELSE c.reloftype::pg_catalog.regtype::pg_catalog.text END, c.relpersistence, c.relreplident, am.amname\x0aFROM pg_catalog.pg_class c\x0a LEFT JOIN pg_catalog.pg_class tc ON (c.reltoastrelid = tc.oid)\x0aLEFT JOIN pg_catalog.pg_am am ON (c.relam = am.oid)\x0aWHERE c.oid = '231189';"
+B	462	RowDescription	 15 "relchecks" 1259 20 21 2 -1 0 "relkind" 1259 18 18 1 -1 0 "relhasindex" 1259 15 16 1 -1 0 "relhasrules" 1259 21 16 1 -1 0 "relhastriggers" 1259 22 16 1 -1 0 "relrowsecurity" 1259 24 16 1 -1 0 "relforcerowsecurity" 1259 25 16 1 -1 0 "relhasoids" 0 0 16 1 -1 0 "relispartition" 1259 28 16 1 -1 0 "?column?" 0 0 25 65535 -1 0 "reltablespace" 1259 9 26 4 -1 0 "reloftype" 0 0 25 65535 -1 0 "relpersistence" 1259 17 18 1 -1 0 "relreplident" 1259 27 18 1 -1 0 "amname" 2601 2 19 64 -1 0
+B	82	DataRow	 15 1 '0' 1 'r' 1 'f' 1 'f' 1 'f' 1 'f' 1 'f' 1 'f' 1 'f' 0 '' 1 '0' 0 '' 1 'p' 1 'd' 4 'heap'
+B	13	CommandComplete	 "SELECT 1"
+B	5	ReadyForQuery	 I
+F	639	Query	 "/* Get per-column information for one relation */\x0aSELECT a.attname,\x0a  pg_catalog.format_type(a.atttypid, a.atttypmod),\x0a  (SELECT pg_catalog.pg_get_expr(d.adbin, d.adrelid, true)\x0a   FROM pg_catalog.pg_attrdef d\x0a   WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef),\x0a  a.attnotnull,\x0a  (SELECT c.collname FROM pg_catalog.pg_collation c, pg_catalog.pg_type t\x0a   WHERE c.oid = a.attcollation AND t.oid = a.atttypid AND a.attcollation <> t.typcollation) AS attcollation,\x0a  a.attidentity,\x0a  a.attgenerated\x0aFROM pg_catalog.pg_attribute a\x0aWHERE a.attrelid = '231189' AND a.attnum > 0 AND NOT a.attisdropped\x0aORDER BY a.attnum;"
+B	213	RowDescription	 7 "attname" 1249 2 19 64 -1 0 "format_type" 0 0 25 65535 -1 0 "pg_get_expr" 0 0 25 65535 -1 0 "attnotnull" 1249 12 16 1 -1 0 "attcollation" 0 0 19 64 -1 0 "attidentity" 1249 15 18 1 -1 0 "attgenerated" 1249 16 18 1 -1 0
+B	43	DataRow	 7 1 'a' 7 'integer' -1 1 'f' -1 0 '' 0 ''
+B	13	CommandComplete	 "SELECT 1"
+B	5	ReadyForQuery	 I
+F	311	Query	 "/* Get foreign key constraints for this table */\x0aSELECT true as sametable, conname,\x0a  pg_catalog.pg_get_constraintdef(r.oid, true) as condef,\x0a  conrelid::pg_catalog.regclass AS ontable\x0aFROM pg_catalog.pg_constraint r\x0aWHERE r.conrelid = '231189' AND r.contype = 'f'\x0a     AND conparentid = 0\x0aORDER BY conname"
+B	111	RowDescription	 4 "sametable" 0 0 16 1 -1 0 "conname" 2606 2 19 64 -1 0 "condef" 0 0 25 65535 -1 0 "ontable" 0 0 2205 4 -1 0
+B	13	CommandComplete	 "SELECT 0"
+B	5	ReadyForQuery	 I
+F	408	Query	 "/* Get foreign keys referencing this table */\x0aSELECT conname, conrelid::pg_catalog.regclass AS ontable,\x0a       pg_catalog.pg_get_constraintdef(oid, true) AS condef\x0a  FROM pg_catalog.pg_constraint c\x0a WHERE confrelid IN (SELECT pg_catalog.pg_partition_ancestors('231189')\x0a                     UNION ALL VALUES ('231189'::pg_catalog.regclass))\x0a       AND contype = 'f' AND conparentid = 0\x0aORDER BY conname;"
+B	83	RowDescription	 3 "conname" 2606 2 19 64 -1 0 "ontable" 0 0 2205 4 -1 0 "condef" 0 0 25 65535 -1 0
+B	13	CommandComplete	 "SELECT 0"
+B	5	ReadyForQuery	 I
+F	585	Query	 "/* Get row-level policies for this table */\x0aSELECT pol.polname, pol.polpermissive,\x0a  CASE WHEN pol.polroles = '{0}' THEN NULL ELSE pg_catalog.array_to_string(array(select rolname from pg_catalog.pg_roles where oid = any (pol.polroles) order by 1),',') END,\x0a  pg_catalog.pg_get_expr(pol.polqual, pol.polrelid),\x0a  pg_catalog.pg_get_expr(pol.polwithcheck, pol.polrelid),\x0a  CASE pol.polcmd\x0a    WHEN 'r' THEN 'SELECT'\x0a    WHEN 'a' THEN 'INSERT'\x0a    WHEN 'w' THEN 'UPDATE'\x0a    WHEN 'd' THEN 'DELETE'\x0a    END AS cmd\x0aFROM pg_catalog.pg_policy pol\x0aWHERE pol.polrelid = '231189' ORDER BY 1;"
+B	180	RowDescription	 6 "polname" 3256 2 19 64 -1 0 "polpermissive" 3256 5 16 1 -1 0 "array_to_string" 0 0 25 65535 -1 0 "pg_get_expr" 0 0 25 65535 -1 0 "pg_get_expr" 0 0 25 65535 -1 0 "cmd" 0 0 25 65535 -1 0
+B	13	CommandComplete	 "SELECT 0"
+B	5	ReadyForQuery	 I
+F	434	Query	 "/* Get extended statistics for this table */\x0aSELECT oid, stxrelid::pg_catalog.regclass, stxnamespace::pg_catalog.regnamespace::pg_catalog.text AS nsp, stxname,\x0apg_catalog.pg_get_statisticsobjdef_columns(oid) AS columns,\x0a  'd' = any(stxkind) AS ndist_enabled,\x0a  'f' = any(stxkind) AS deps_enabled,\x0a  'm' = any(stxkind) AS mcv_enabled,\x0astxstattarget\x0aFROM pg_catalog.pg_statistic_ext\x0aWHERE stxrelid = '231189'\x0aORDER BY nsp, stxname;"
+B	254	RowDescription	 9 "oid" 3381 1 26 4 -1 0 "stxrelid" 0 0 2205 4 -1 0 "nsp" 0 0 25 65535 -1 0 "stxname" 3381 3 19 64 -1 0 "columns" 0 0 25 65535 -1 0 "ndist_enabled" 0 0 16 1 -1 0 "deps_enabled" 0 0 16 1 -1 0 "mcv_enabled" 0 0 16 1 -1 0 "stxstattarget" 3381 7 21 2 -1 0
+B	13	CommandComplete	 "SELECT 0"
+B	5	ReadyForQuery	 I
+F	1298	Query	 "/* Get publications that publish this table */\x0aSELECT pubname\x0a     , NULL\x0a     , NULL\x0aFROM pg_catalog.pg_publication p\x0a     JOIN pg_catalog.pg_publication_namespace pn ON p.oid = pn.pnpubid\x0a     JOIN pg_catalog.pg_class pc ON pc.relnamespace = pn.pnnspid\x0aWHERE pc.oid ='231189' and pg_catalog.pg_relation_is_publishable('231189')\x0aUNION\x0aSELECT pubname\x0a     , pg_catalog.pg_get_expr(pr.prqual, c.oid)\x0a     , (CASE WHEN pr.prattrs IS NOT NULL THEN\x0a         (SELECT pg_catalog.string_agg(attname, ', ')\x0a           FROM pg_catalog.generate_series(0, pg_catalog.array_upper(pr.prattrs::pg_catalog.int2[], 1)) s,\x0a                pg_catalog.pg_attribute\x0a          WHERE attrelid = pr.prrelid AND attnum = prattrs[s])\x0a        ELSE NULL END) FROM pg_catalog.pg_publication p\x0a     JOIN pg_catalog.pg_publication_rel pr ON p.oid = pr.prpubid\x0a     JOIN pg_catalog.pg_class c ON c.oid = pr.prrelid\x0aWHERE pr.prrelid = '231189'\x0a AND NOT pr.prexcept\x0aUNION\x0aSELECT pubname\x0a     , NULL\x0a     , NULL\x0aFROM pg_catalog.pg_publication p\x0aWHERE p.puballtables AND pg_catalog.pg_relation_is_publishable('231189')\x0a     AND NOT EXISTS (\x0a     SELECT 1\x0a     FROM pg_catalog.pg_publication_rel pr\x0a     WHERE pr.prpubid = p.oid AND\x0a     (pr.prrelid = '231189' OR pr.prrelid = pg_catalog.pg_partition_root('231189')))\x0aORDER BY 1;"
+B	86	RowDescription	 3 "pubname" 0 0 19 64 -1 0 "?column?" 0 0 25 65535 -1 0 "?column?" 0 0 25 65535 -1 0
+B	13	CommandComplete	 "SELECT 0"
+B	5	ReadyForQuery	 I
+F	272	Query	 "/* Get publications that exclude this table */\x0aSELECT pubname\x0aFROM pg_catalog.pg_publication p\x0aJOIN pg_catalog.pg_publication_rel pr ON p.oid = pr.prpubid\x0aWHERE (pr.prrelid = '231189' OR pr.prrelid = pg_catalog.pg_partition_root('231189'))\x0aAND pr.prexcept\x0aORDER BY 1;"
+B	32	RowDescription	 1 "pubname" 6104 2 19 64 -1 0
+B	13	CommandComplete	 "SELECT 0"
+B	5	ReadyForQuery	 I
+F	242	Query	 "/* Get inheritance parent tables */\x0aSELECT c.oid::pg_catalog.regclass\x0aFROM pg_catalog.pg_class c, pg_catalog.pg_inherits i\x0aWHERE c.oid = i.inhparent AND i.inhrelid = '231189'\x0a  AND c.relkind != 'p' AND c.relkind != 'I'\x0aORDER BY inhseqno;"
+B	28	RowDescription	 1 "oid" 0 0 2205 4 -1 0
+B	13	CommandComplete	 "SELECT 0"
+B	5	ReadyForQuery	 I
+F	355	Query	 "/* Get child tables */\x0aSELECT c.oid::pg_catalog.regclass, c.relkind, inhdetachpending, pg_catalog.pg_get_expr(c.relpartbound, c.oid)\x0aFROM pg_catalog.pg_class c, pg_catalog.pg_inherits i\x0aWHERE c.oid = i.inhrelid AND i.inhparent = '231189'\x0aORDER BY pg_catalog.pg_get_expr(c.relpartbound, c.oid) = 'DEFAULT', c.oid::pg_catalog.regclass::pg_catalog.text;"
+B	119	RowDescription	 4 "oid" 0 0 2205 4 -1 0 "relkind" 1259 18 18 1 -1 0 "inhdetachpending" 2611 4 16 1 -1 0 "pg_get_expr" 0 0 25 65535 -1 0
+B	13	CommandComplete	 "SELECT 0"
+B	5	ReadyForQuery	 I
+F	20	Query	 "drop table rp_t"
+B	15	CommandComplete	 "DROP TABLE"
+B	5	ReadyForQuery	 I
+F	4	Terminate

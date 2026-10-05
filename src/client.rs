@@ -111,6 +111,8 @@ pub(crate) struct Client {
     pub(crate) startup: Vec<Frame>,
     /// The process ID from `BackendKeyData`.
     pub(crate) pid: i32,
+    /// The secret key from `BackendKeyData`. Protocol 3.2 lets it be longer than 4 bytes.
+    pub(crate) key: Vec<u8>,
 }
 
 impl Client {
@@ -133,7 +135,7 @@ impl Client {
                 Stream::Unix(s)
             }
         };
-        let mut client = Client { stream, startup: Vec::new(), pid: 0 };
+        let mut client = Client { stream, startup: Vec::new(), pid: 0, key: Vec::new() };
         match client.login(login) {
             Ok(()) => Ok(client),
             Err(message) => Err(Refused {
@@ -227,6 +229,7 @@ impl Client {
             let tag = f.tag;
             if tag == b'K' {
                 self.pid = f.fields().i32().unwrap_or(0);
+                self.key = f.body.get(4..).unwrap_or_default().to_vec();
             }
             let text = (tag == b'E').then(|| error_text(&f));
             self.startup.push(f);
@@ -287,6 +290,21 @@ impl Drop for Client {
 }
 
 /// The severity, code and message of an error, for a person to read.
+/// Sends a `CancelRequest` for a session on a new TCP connection. The server reads the key and
+/// closes the connection without an answer, so this waits for the close.
+pub(crate) fn cancel(server: &Server, pid: i32, key: &[u8]) -> io::Result<()> {
+    let mut stream = TcpStream::connect(("127.0.0.1", server.port))?;
+    stream.set_read_timeout(Some(READ_TIMEOUT))?;
+    let mut body = frame::CANCEL_REQUEST.to_be_bytes().to_vec();
+    body.extend_from_slice(&pid.to_be_bytes());
+    body.extend_from_slice(key);
+    let mut message = ((body.len() + 4) as u32).to_be_bytes().to_vec();
+    message.extend_from_slice(&body);
+    stream.write_all(&message)?;
+    let _ = stream.read(&mut [0u8; 1]);
+    Ok(())
+}
+
 pub(crate) fn error_text(f: &Frame) -> String {
     let fields = frame::notice_fields(f);
     let get =
