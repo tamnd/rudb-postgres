@@ -1,0 +1,62 @@
+F	39	StartupMessage	 3 0 "user" "postgres" "database" "replay"
+B	23	AuthenticationSASL	 "SCRAM-SHA-256" ""
+F	54	SASLInitialResponse	 "SCRAM-SHA-256" 32 'n,,n=,r=6LS64rBV5DJKIfOWT8lNIf5z'
+B	92	AuthenticationSASLContinue	 'r=6LS64rBV5DJKIfOWT8lNIf5zcSPOVRjsjoEnSRuQ1bFtquJS,s=CoU6vdcRmrZE2KL64k64gg==,i=4096'
+F	108	SASLResponse	 'c=biws,r=6LS64rBV5DJKIfOWT8lNIf5zcSPOVRjsjoEnSRuQ1bFtquJS,p=vIv8rWVdU82fBqOXxeiRCjBrdrseqCuzBVz9p9RCPR8='
+B	54	AuthenticationSASLFinal	 'v=OGuyOPu6NdYBxNnHV0FUCE3hDLxYDo78sKqOSvzdAfg='
+B	8	AuthenticationOk
+B	27	ParameterStatus	 "IntervalStyle" "postgres"
+B	32	ParameterStatus	 "search_path" "\x22$user\x22, public"
+B	20	ParameterStatus	 "is_superuser" "on"
+B	35	ParameterStatus	 "standard_conforming_strings" "on"
+B	35	ParameterStatus	 "session_authorization" "postgres"
+B	25	ParameterStatus	 "client_encoding" "UTF8"
+B	27	ParameterStatus	 "server_version" "19beta4"
+B	25	ParameterStatus	 "server_encoding" "UTF8"
+B	23	ParameterStatus	 "in_hot_standby" "off"
+B	25	ParameterStatus	 "integer_datetimes" "on"
+B	17	ParameterStatus	 "TimeZone" "UTC"
+B	22	ParameterStatus	 "application_name" ""
+B	38	ParameterStatus	 "default_transaction_read_only" "off"
+B	26	ParameterStatus	 "scram_iterations" "4096"
+B	23	ParameterStatus	 "DateStyle" "ISO, MDY"
+B	12	BackendKeyData	 97888 'S\x87}\x8a'
+B	5	ReadyForQuery	 I
+F	27	Query	 "SET lc_messages TO \x22C\x22"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	35	Query	 "SET debug_parallel_query = off"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	16	Parse	 "" "SELECT 1" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Flush
+B	4	ParseComplete
+B	4	BindComplete
+B	33	RowDescription	 1 "?column?" 0 0 23 4 -1 0
+B	11	DataRow	 1 1 '1'
+B	13	CommandComplete	 "SELECT 1"
+F	16	Parse	 "" "SELECT 2" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Flush
+B	4	ParseComplete
+B	4	BindComplete
+B	33	RowDescription	 1 "?column?" 0 0 23 4 -1 0
+B	11	DataRow	 1 1 '2'
+B	13	CommandComplete	 "SELECT 1"
+F	49	Parse	 "" "SELECT pg_catalog.pg_advisory_unlock(1,1)" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Flush
+B	4	ParseComplete
+B	4	BindComplete
+B	43	RowDescription	 1 "pg_advisory_unlock" 0 0 16 1 -1 0
+B	101	NoticeResponse	 S "WARNING" V "WARNING" C "01000" M "you don't own a lock of type ExclusiveLock" F "lock.c" L "2184" R "LockRelease" \x00
+B	11	DataRow	 1 1 'f'
+B	13	CommandComplete	 "SELECT 1"
+F	4	Terminate

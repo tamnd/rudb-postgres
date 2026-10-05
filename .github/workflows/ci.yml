@@ -85,6 +85,22 @@ jobs:
         run: cargo run -q --release -- regress
       - name: the isolation specs pass on the oracle and its twin
         run: cargo run -q --release -- isolation
+      - name: the proxy writes the same trace as libpq for each libpq_pipeline test
+        env:
+          PGPASSWORD: postgres
+        run: |
+          pipeline=$(ls -d target/oracle/*/test/pipeline | grep -v src)
+          ldd "$pipeline/bin/libpq_pipeline" | grep libpq
+          for test in $(ls "$pipeline/traces" | sed 's/\.trace$//'); do
+            target/release/rudb-postgres record --to oracle --name "regress-$test" --sessions 1 &
+            sleep 1
+            "$pipeline/bin/libpq_pipeline" -t "run/libpq-$test.trace" "$test" "host=127.0.0.1 port=55440 user=postgres dbname=postgres sslmode=disable"
+            wait
+            diff -u "$pipeline/traces/$test.trace" "run/libpq-$test.trace"
+            tail -n "$(wc -l < "run/libpq-$test.trace")" "run/traces/regress-$test-1.trace" | diff -u "run/libpq-$test.trace" -
+          done
+      - name: the libpq_pipeline sessions replay the same on the oracle and its twin
+        run: cargo run -q --release -- replay corpus/protocol/libpq_pipeline/*.trace
       - name: stop them
         run: cargo run -q --release -- down
       - name: keep the server logs
@@ -97,6 +113,7 @@ jobs:
             run/regress/*/regression.diffs
             run/isolation/*/regression.diffs
             run/results/*.json
+            run/traces/*.trace
           retention-days: 14
 
   ci:

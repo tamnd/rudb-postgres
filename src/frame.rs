@@ -53,8 +53,36 @@ pub(crate) fn read(stream: &mut impl Read) -> io::Result<Frame> {
     Ok(Frame { tag: head[0], body })
 }
 
+/// The largest startup packet that PostgreSQL accepts, `MAX_STARTUP_PACKET_LENGTH`.
+const MAX_STARTUP: usize = 10_000;
+
+/// Reads one message without a type byte, as a server reads it before the startup: a
+/// `StartupMessage`, an `SSLRequest`, a `GSSENCRequest` or a `CancelRequest`. The bytes include
+/// the length, as `PQtrace` takes them.
+pub(crate) fn read_untagged(stream: &mut impl Read) -> io::Result<Vec<u8>> {
+    let mut head = [0u8; 4];
+    stream.read_exact(&mut head)?;
+    let length = u32::from_be_bytes(head) as usize;
+    if !(8..=MAX_STARTUP).contains(&length) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("a startup packet with length {length}"),
+        ));
+    }
+    let mut message = vec![0u8; length];
+    message[..4].copy_from_slice(&head);
+    stream.read_exact(&mut message[4..])?;
+    Ok(message)
+}
+
 /// The protocol version 3.0, as the startup message carries it.
 pub(crate) const PROTOCOL_3_0: u32 = 196_608;
+/// The request code of `CancelRequest`, in the place of the protocol version.
+pub(crate) const CANCEL_REQUEST: u32 = 80_877_102;
+/// The request code of `SSLRequest`.
+pub(crate) const SSL_REQUEST: u32 = 80_877_103;
+/// The request code of `GSSENCRequest`.
+pub(crate) const GSSENC_REQUEST: u32 = 80_877_104;
 
 /// The bytes of a `StartupMessage`.
 pub(crate) fn startup(version: u32, parameters: &[(&str, &str)]) -> Vec<u8> {

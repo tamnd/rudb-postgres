@@ -1,0 +1,72 @@
+F	39	StartupMessage	 3 0 "user" "postgres" "database" "replay"
+B	23	AuthenticationSASL	 "SCRAM-SHA-256" ""
+F	54	SASLInitialResponse	 "SCRAM-SHA-256" 32 'n,,n=,r=YnL2gO/fZLYkRoo7P0YWGyK0'
+B	92	AuthenticationSASLContinue	 'r=YnL2gO/fZLYkRoo7P0YWGyK0TMImUEh5RroQByP8KZwgv8L/,s=CoU6vdcRmrZE2KL64k64gg==,i=4096'
+F	108	SASLResponse	 'c=biws,r=YnL2gO/fZLYkRoo7P0YWGyK0TMImUEh5RroQByP8KZwgv8L/,p=HvGw1V4cpgo6qxXeHF/vRAUZe8wIt9qXC4052nb6z3s='
+B	54	AuthenticationSASLFinal	 'v=eb5bYLyONqVXm4T7b5tyDzs/sxo3bqmOqv+c0F/OSCc='
+B	8	AuthenticationOk
+B	27	ParameterStatus	 "IntervalStyle" "postgres"
+B	32	ParameterStatus	 "search_path" "\x22$user\x22, public"
+B	20	ParameterStatus	 "is_superuser" "on"
+B	35	ParameterStatus	 "standard_conforming_strings" "on"
+B	35	ParameterStatus	 "session_authorization" "postgres"
+B	25	ParameterStatus	 "client_encoding" "UTF8"
+B	27	ParameterStatus	 "server_version" "19beta4"
+B	25	ParameterStatus	 "server_encoding" "UTF8"
+B	23	ParameterStatus	 "in_hot_standby" "off"
+B	25	ParameterStatus	 "integer_datetimes" "on"
+B	17	ParameterStatus	 "TimeZone" "UTC"
+B	22	ParameterStatus	 "application_name" ""
+B	38	ParameterStatus	 "default_transaction_read_only" "off"
+B	26	ParameterStatus	 "scram_iterations" "4096"
+B	23	ParameterStatus	 "DateStyle" "ISO, MDY"
+B	12	BackendKeyData	 97910 'S\xaaH\xc1'
+B	5	ReadyForQuery	 I
+F	27	Query	 "SET lc_messages TO \x22C\x22"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	35	Query	 "SET debug_parallel_query = off"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	68	Parse	 "select_one" "SELECT $1, '42', $1::numeric, interval '1 sec'" 1 23
+F	16	Describe	 S "select_one"
+F	4	Sync
+B	4	ParseComplete
+B	10	ParameterDescription	 1 23
+B	113	RowDescription	 4 "?column?" 0 0 23 4 -1 0 "?column?" 0 0 25 65535 -1 0 "numeric" 0 0 1700 65535 -1 0 "interval" 0 0 1186 16 -1 0
+B	5	ReadyForQuery	 I
+F	16	Close	 S "select_one"
+F	4	Sync
+B	4	CloseComplete
+B	5	ReadyForQuery	 I
+F	16	Describe	 S "select_one"
+F	4	Sync
+B	114	ErrorResponse	 S "ERROR" V "ERROR" C "26000" M "prepared statement \x22select_one\x22 does not exist" F "prepare.c" L "456" R "FetchPreparedStatement" \x00
+B	5	ReadyForQuery	 I
+F	16	Close	 S "select_one"
+F	4	Sync
+B	4	CloseComplete
+B	5	ReadyForQuery	 I
+F	10	Query	 "BEGIN"
+B	10	CommandComplete	 "BEGIN"
+B	5	ReadyForQuery	 T
+F	43	Query	 "DECLARE cursor_one CURSOR FOR SELECT 1"
+B	19	CommandComplete	 "DECLARE CURSOR"
+B	5	ReadyForQuery	 T
+F	16	Describe	 P "cursor_one"
+F	4	Sync
+B	33	RowDescription	 1 "?column?" 0 0 23 4 -1 0
+B	5	ReadyForQuery	 T
+F	16	Close	 P "cursor_one"
+F	4	Sync
+B	4	CloseComplete
+B	5	ReadyForQuery	 T
+F	16	Describe	 P "cursor_one"
+F	4	Sync
+B	110	ErrorResponse	 S "ERROR" V "ERROR" C "34000" M "portal \x22cursor_one\x22 does not exist" F "postgres.c" L "2750" R "exec_describe_portal_message" \x00
+B	5	ReadyForQuery	 E
+F	16	Close	 P "cursor_one"
+F	4	Sync
+B	4	CloseComplete
+B	5	ReadyForQuery	 E
+F	4	Terminate

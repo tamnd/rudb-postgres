@@ -1,0 +1,92 @@
+F	39	StartupMessage	 3 0 "user" "postgres" "database" "replay"
+B	23	AuthenticationSASL	 "SCRAM-SHA-256" ""
+F	54	SASLInitialResponse	 "SCRAM-SHA-256" 32 'n,,n=,r=IH25rm6I2MTVuSo/8b5xCaqD'
+B	92	AuthenticationSASLContinue	 'r=IH25rm6I2MTVuSo/8b5xCaqDjzp9tzslGxhv/lztOy0+GZB0,s=CoU6vdcRmrZE2KL64k64gg==,i=4096'
+F	108	SASLResponse	 'c=biws,r=IH25rm6I2MTVuSo/8b5xCaqDjzp9tzslGxhv/lztOy0+GZB0,p=PSQ96ijo1gromH132KaJc0NwvvigYJA+vzpqtv+VyeY='
+B	54	AuthenticationSASLFinal	 'v=vBbKn7kEytOvoT/EYdcu8StNj171STXEHSEN+mzpuRI='
+B	8	AuthenticationOk
+B	27	ParameterStatus	 "IntervalStyle" "postgres"
+B	32	ParameterStatus	 "search_path" "\x22$user\x22, public"
+B	20	ParameterStatus	 "is_superuser" "on"
+B	35	ParameterStatus	 "standard_conforming_strings" "on"
+B	35	ParameterStatus	 "session_authorization" "postgres"
+B	25	ParameterStatus	 "client_encoding" "UTF8"
+B	27	ParameterStatus	 "server_version" "19beta4"
+B	25	ParameterStatus	 "server_encoding" "UTF8"
+B	23	ParameterStatus	 "in_hot_standby" "off"
+B	25	ParameterStatus	 "integer_datetimes" "on"
+B	17	ParameterStatus	 "TimeZone" "UTC"
+B	22	ParameterStatus	 "application_name" ""
+B	38	ParameterStatus	 "default_transaction_read_only" "off"
+B	26	ParameterStatus	 "scram_iterations" "4096"
+B	23	ParameterStatus	 "DateStyle" "ISO, MDY"
+B	12	BackendKeyData	 97833 ';\xef\x5c?'
+B	5	ReadyForQuery	 I
+F	27	Query	 "SET lc_messages TO \x22C\x22"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	35	Query	 "SET debug_parallel_query = off"
+B	8	CommandComplete	 "SET"
+B	5	ReadyForQuery	 I
+F	42	Query	 "DROP TABLE IF EXISTS pq_pipeline_demo"
+B	123	NoticeResponse	 S "NOTICE" V "NOTICE" C "00000" M "table \x22pq_pipeline_demo\x22 does not exist, skipping" F "tablecmds.c" L "1528" R "DropErrorMsgNonExistent" \x00
+B	15	CommandComplete	 "DROP TABLE"
+B	5	ReadyForQuery	 I
+F	99	Query	 "CREATE UNLOGGED TABLE pq_pipeline_demo(id serial primary key, itemno integer,int8filler int8);"
+B	17	CommandComplete	 "CREATE TABLE"
+B	5	ReadyForQuery	 I
+F	60	Parse	 "" "INSERT INTO pq_pipeline_demo(itemno) VALUES ($1)" 1 23
+F	19	Bind	 "" "" 0 1 1 '1' 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	39	Parse	 "" "SELECT no_such_function($1)" 1 23
+F	19	Bind	 "" "" 0 1 1 '1' 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	60	Parse	 "" "INSERT INTO pq_pipeline_demo(itemno) VALUES ($1)" 1 23
+F	19	Bind	 "" "" 0 1 1 '2' 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Sync
+F	60	Parse	 "" "INSERT INTO pq_pipeline_demo(itemno) VALUES ($1)" 1 23
+F	19	Bind	 "" "" 0 1 1 '3' 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Sync
+B	4	ParseComplete
+B	4	BindComplete
+B	4	NoData
+B	15	CommandComplete	 "INSERT 0 1"
+B	154	ErrorResponse	 S "ERROR" V "ERROR" C "42883" M "function no_such_function(integer) does not exist" D "There is no function of that name." P "8" F "parse_func.c" L "656" R "ParseFuncOrColumn" \x00
+B	5	ReadyForQuery	 I
+B	4	ParseComplete
+B	4	BindComplete
+B	4	NoData
+B	15	CommandComplete	 "INSERT 0 1"
+B	5	ReadyForQuery	 I
+F	26	Parse	 "" "SELECT 1; SELECT 2" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Sync
+B	123	ErrorResponse	 S "ERROR" V "ERROR" C "42601" M "cannot insert multiple commands into a prepared statement" F "postgres.c" L "1491" R "exec_parse_message" \x00
+B	5	ReadyForQuery	 I
+F	54	Parse	 "" "SELECT 1.0/g FROM generate_series(3, -1, -1) g" 0
+F	14	Bind	 "" "" 0 0 1 0
+F	6	Describe	 P ""
+F	9	Execute	 "" 0
+F	4	Sync
+B	4	ParseComplete
+B	4	BindComplete
+B	33	RowDescription	 1 "?column?" 0 0 1700 65535 -1 0
+B	32	DataRow	 1 22 '0.33333333333333333333'
+B	32	DataRow	 1 22 '0.50000000000000000000'
+B	32	DataRow	 1 22 '1.00000000000000000000'
+B	79	ErrorResponse	 S "ERROR" V "ERROR" C "22012" M "division by zero" F "numeric.c" L "3249" R "numeric_div_safe" \x00
+B	5	ReadyForQuery	 I
+F	40	Query	 "SELECT itemno FROM pq_pipeline_demo"
+B	31	RowDescription	 1 "itemno" 137011 2 23 4 -1 0
+B	11	DataRow	 1 1 '3'
+B	13	CommandComplete	 "SELECT 1"
+B	5	ReadyForQuery	 I
+F	4	Terminate
