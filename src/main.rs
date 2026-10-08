@@ -17,6 +17,7 @@ mod frame;
 mod generate;
 mod json;
 mod oracle;
+mod parse;
 mod perf;
 mod pins;
 mod process;
@@ -63,6 +64,9 @@ commands:
   drivers [<name>...]   run the smoke script of each client in drivers/, or of the named
                         clients, against both servers; each one connects over TLS with
                         SCRAM and runs SELECT 1
+  parse [<file>...]     send each statement of the regression suite, or of the named files,
+                        to a session in a failed block on both servers, and count the
+                        statements that both grammars accept or both refuse
   perf [--seconds <n>] [--idle <n>]
                         measure the SELECT 1 floor, the connection rate with trust and
                         with SCRAM, and the memory of an idle session on both servers;
@@ -137,6 +141,10 @@ fn main() -> ExitCode {
         },
         "report" => report(report_command(&args[1..])),
         "perf" => report(perf_command(&args[1..])),
+        "parse" => match parse_command(&args[1..]) {
+            Ok(count) => differences(count),
+            Err(error) => report(Err(error)),
+        },
         "drivers" => match drivers_command(&args[1..]) {
             Ok(count) => differences(count),
             Err(error) => report(Err(error)),
@@ -243,6 +251,35 @@ fn perf_command(args: &[String]) -> Result<(), String> {
 }
 
 /// Runs the driver gate and writes `run/results/drivers.json`.
+/// Runs `parse` on the named files, or on the `.sql` files of the regression suite of the oracle,
+/// and writes `run/results/parse.json`.
+fn parse_command(args: &[String]) -> Result<usize, String> {
+    if let Some(option) = args.iter().find(|a| a.starts_with("--")) {
+        return Err(format!("unknown option {option:?}"));
+    }
+    let root = pins::root()?;
+    let mut files: Vec<PathBuf> = args.iter().map(PathBuf::from).collect();
+    if files.is_empty() {
+        let dir = oracle::prefix(&root, &pins::Pins::read(&root)?)
+            .join("test")
+            .join("regress")
+            .join("sql");
+        let entries =
+            std::fs::read_dir(&dir).map_err(|e| format!("cannot list {}: {e}", dir.display()))?;
+        files = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|e| e == "sql"))
+            .collect();
+        files.sort();
+    }
+    let servers = servers::load(&root)?;
+    let paths: Vec<&std::path::Path> = files.iter().map(PathBuf::as_path).collect();
+    let (json, count) = parse::run(&servers[0], &servers[1], &paths)?;
+    write_result(&root, "parse", &json)?;
+    Ok(count)
+}
+
 fn drivers_command(args: &[String]) -> Result<usize, String> {
     if let Some(option) = args.iter().find(|a| a.starts_with("--")) {
         return Err(format!("unknown option {option:?}"));
