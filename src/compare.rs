@@ -200,7 +200,7 @@ fn data_row(f: &Frame) -> String {
 /// An `ErrorResponse` or `NoticeResponse` without the fields `F`, `L` and `R`, which name a C
 /// file, line and routine in PostgreSQL. The other fields are sorted by code, because a client
 /// reads a field by its code and not by its position.
-fn notice(f: &Frame) -> String {
+pub(crate) fn notice(f: &Frame) -> String {
     let mut fields: Vec<(u8, String)> = frame::notice_fields(f)
         .into_iter()
         .filter(|(code, _)| !matches!(code, b'F' | b'L' | b'R'))

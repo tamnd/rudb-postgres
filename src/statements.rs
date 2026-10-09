@@ -113,11 +113,23 @@ impl Counts {
     }
 }
 
-/// The first difference of a test.
+/// The counts and the differences of one test.
+#[derive(Default)]
+struct Test {
+    name: String,
+    counts: Counts,
+    /// Each statement that differs: the first is the finding, and the others are downstream of it.
+    findings: Vec<Finding>,
+}
+
+/// A statement that differs.
 struct Finding {
     session: usize,
     statement: String,
     differences: Vec<Difference>,
+    /// The first error that each server sent for the statement, so that a report can group the
+    /// differences by the error.
+    errors: [Option<String>; 2],
 }
 
 /// Records the suite on the oracle, replays it on both servers, and returns the number of
@@ -137,19 +149,19 @@ pub(crate) fn run(
     // the runner keeps only the answers of one statement.
     regress::clean(oracle);
     regress::clean(other);
-    let mut tests: Vec<(String, Counts, Option<Finding>)> = Vec::new();
+    let mut tests: Vec<Test> = Vec::new();
     for session in &sessions {
         // The tests of a parallel group interleave their sessions, so a later session can be of
         // a test that is not the last one.
-        let i = match tests.iter().position(|(test, _, _)| *test == session.test) {
+        let i = match tests.iter().position(|test| test.name == session.test) {
             Some(i) => i,
             None => {
                 println!("replaying {}", session.test);
-                tests.push((session.test.clone(), Counts::default(), None));
+                tests.push(Test { name: session.test.clone(), ..Test::default() });
                 tests.len() - 1
             }
         };
-        let (_, counts, finding) = &mut tests[i];
+        let test = &mut tests[i];
         let (mut a, mut b) = (Player::open(oracle, session), Player::open(other, session));
         for statement in &session.statements {
             let (x, y) = (a.answer(statement), b.answer(statement));
@@ -161,17 +173,22 @@ pub(crate) fn run(
             let outcome = match differences {
                 None => Outcome::Excluded,
                 Some(d) if d.is_empty() => Outcome::Same,
-                Some(_) if finding.is_some() => Outcome::Downstream,
                 Some(differences) => {
-                    *finding = Some(Finding {
+                    let outcome = if test.findings.is_empty() {
+                        Outcome::Different
+                    } else {
+                        Outcome::Downstream
+                    };
+                    test.findings.push(Finding {
                         session: session.number,
                         statement: statement.text.clone(),
                         differences,
+                        errors: [first_error(&x), first_error(&y)],
                     });
-                    Outcome::Different
+                    outcome
                 }
             };
-            counts.add(outcome);
+            test.counts.add(outcome);
         }
         a.close();
         b.close();
@@ -182,10 +199,11 @@ pub(crate) fn run(
         "{:<28} {:>6} {:>10} {:>11} {:>9}",
         "test", "same", "different", "downstream", "excluded"
     );
-    for (test, counts, _) in &tests {
+    for test in &tests {
+        let counts = &test.counts;
         println!(
             "{:<28} {:>6} {:>10} {:>11} {:>9}",
-            test, counts.same, counts.different, counts.downstream, counts.excluded
+            test.name, counts.same, counts.different, counts.downstream, counts.excluded
         );
         total.same += counts.same;
         total.different += counts.different;
@@ -212,11 +230,17 @@ pub(crate) fn run(
         Json::Array(
             tests
                 .iter()
-                .map(|(test, counts, finding)| {
-                    let mut fields = vec![("test", Json::str(test))];
-                    fields.extend(counts.json());
-                    if let Some(f) = finding {
+                .map(|test| {
+                    let mut fields = vec![("test", Json::str(&test.name))];
+                    fields.extend(test.counts.json());
+                    if let Some(f) = test.findings.first() {
                         fields.push(("first", finding_json(f)));
+                    }
+                    if test.findings.len() > 1 {
+                        fields.push((
+                            "later",
+                            Json::Array(test.findings[1..].iter().map(finding_json).collect()),
+                        ));
                     }
                     Json::object(fields)
                 })
@@ -230,8 +254,17 @@ fn percent(part: usize, whole: usize) -> f64 {
     if whole == 0 { 0.0 } else { part as f64 * 100.0 / whole as f64 }
 }
 
+/// The first `ErrorResponse` of an answer, with its fields as the comparison shows them.
+fn first_error(answer: &Answer) -> Option<String> {
+    let frames = answer.as_ref().ok()?;
+    frames.iter().find(|f| f.tag == b'E').map(compare::notice)
+}
+
 fn finding_json(f: &Finding) -> Json {
+    let error = |e: &Option<String>| e.as_deref().map_or(Json::Null, Json::str);
     Json::object(vec![
+        ("oracle_error", error(&f.errors[0])),
+        ("other_error", error(&f.errors[1])),
         ("session", Json::Number(f.session as i64)),
         ("statement", Json::str(&f.statement)),
         (
