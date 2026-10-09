@@ -63,15 +63,15 @@ pub(crate) struct Options {
 }
 
 /// The result of one driver run on one server.
-struct Run {
+pub(crate) struct Run {
     /// Each test in the order of the run, and whether it passed.
-    outcomes: Vec<(String, bool)>,
+    pub(crate) outcomes: Vec<(String, bool)>,
     /// The diff of each failed test, with the paths and the times removed.
     diffs: BTreeMap<String, String>,
 }
 
 impl Run {
-    fn passed(&self) -> usize {
+    pub(crate) fn passed(&self) -> usize {
         self.outcomes.iter().filter(|(_, ok)| *ok).count()
     }
 
@@ -174,7 +174,7 @@ fn summary(server: &Server, run: &Run) -> Json {
 }
 
 /// Runs the driver against one server and reads its output.
-fn drive(
+pub(crate) fn drive(
     root: &Path,
     prefix: &Path,
     suite: &Suite,
@@ -232,9 +232,12 @@ fn drive(
             suite.program, server.name
         ));
     }
-    let diffs = match std::fs::read_to_string(out.join("regression.diffs")) {
-        Ok(text) => split_diffs(&text),
-        Err(_) => BTreeMap::new(),
+    // The diffs of the encoding tests have bytes that are not UTF-8, and a diff that does not
+    // read is not a diff that is not there.
+    let diffs = match std::fs::read(out.join("regression.diffs")) {
+        Ok(bytes) => split_diffs(&String::from_utf8_lossy(&bytes)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
+        Err(e) => return Err(format!("cannot read the diffs of {}: {e}", server.name)),
     };
     Ok(Run { outcomes, diffs })
 }
@@ -243,7 +246,7 @@ fn drive(
 /// database `regression` itself, but the tablespace of `test_setup` is not in a database, and only
 /// the test `tablespace` near the end of the schedule drops it. This is best effort: a server that
 /// refuses the statements fails the tests that need them, and the run shows that.
-fn clean(server: &Server) {
+pub(crate) fn clean(server: &Server) {
     let Ok(mut admin) = Client::connect(server, &Login::superuser("postgres")) else { return };
     for sql in [
         "DROP DATABASE IF EXISTS regression WITH (FORCE)",

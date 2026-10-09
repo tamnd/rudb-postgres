@@ -28,6 +28,7 @@ mod report;
 mod scram;
 mod servers;
 mod sql;
+mod statements;
 mod toml;
 mod trace;
 mod upstream;
@@ -59,6 +60,10 @@ commands:
   regress [--accept] [<test>...]
                         run the core regression suite with pg_regress on both servers;
                         --accept writes the diffs of rudb to corpus/regress
+  statements [<test>...]
+                        record the core regression suite with pg_regress through the proxy
+                        in front of the oracle, replay each statement on both servers and
+                        count the statements that give the same answer
   isolation [--accept] [<spec>...]
                         run the isolation specs with pg_isolation_regress on both servers
   drivers [<name>...]   run the smoke script of each client in drivers/, or of the named
@@ -127,6 +132,10 @@ fn main() -> ExitCode {
                 Err(error) => report(Err(error)),
             }
         }
+        "statements" => match statements_command(&args[1..]) {
+            Ok(count) => differences(count),
+            Err(error) => report(Err(error)),
+        },
         "record" => match record_command(&args[1..]) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => report(Err(error)),
@@ -426,6 +435,23 @@ fn regress_command(suite: &regress::Suite, args: &[String]) -> Result<usize, Str
     let servers = servers::load(&root)?;
     let (count, json) = regress::run(&root, &prefix, suite, &servers[0], &servers[1], &options)?;
     write_result(&root, suite.name, &json)?;
+    Ok(count)
+}
+
+/// Runs `statements` and writes `run/results/statements.json`.
+fn statements_command(args: &[String]) -> Result<usize, String> {
+    let mut options = statements::Options::default();
+    for arg in args {
+        match arg.as_str() {
+            other if other.starts_with("--") => return Err(format!("unknown option {other:?}")),
+            test => options.tests.push(test.to_string()),
+        }
+    }
+    let root = pins::root()?;
+    let prefix = oracle::installed(&root, &pins::Pins::read(&root)?)?;
+    let servers = servers::load(&root)?;
+    let (count, json) = statements::run(&root, &prefix, &servers[0], &servers[1], &options)?;
+    write_result(&root, "statements", &json)?;
     Ok(count)
 }
 

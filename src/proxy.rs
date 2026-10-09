@@ -1,7 +1,9 @@
 //! The recording proxy of document 14 section 14.4 of the PostgreSQL compatibility notes.
 //!
-//! The proxy listens on a TCP port on the loopback address. For each client it opens a TCP
-//! connection to the server and forwards each frame in both directions without a change. Before
+//! The proxy listens on a TCP port on the loopback address, or on a Unix socket. For each client
+//! it opens a connection of the same kind to the server and forwards each frame in both
+//! directions without a change. The regression runner of section 14.8 uses the Unix socket, so
+//! that `pg_regress` and its psql sessions log in with trust as they do without the proxy. Before
 //! it forwards a frame, it writes the line of the frame to the trace of the session. So the order
 //! of the lines is an order that the session can have: a backend line comes after the frontend
 //! line that caused it, and a frontend line comes after each backend line that the client could
@@ -18,11 +20,13 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::thread::{self, JoinHandle};
 
 use crate::frame::{self, Frame};
 use crate::servers::Server;
@@ -47,11 +51,12 @@ impl Default for Options {
     }
 }
 
+/// Records over TCP in front of a server, in `run/traces`, until the proxy has recorded the
+/// sessions of the options, or until it is stopped.
 pub(crate) fn record(root: &Path, server: &Server, options: &Options) -> Result<(), String> {
     let dir = root.join("run").join("traces");
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
-    let listener = TcpListener::bind(("127.0.0.1", options.port))
-        .map_err(|e| format!("cannot listen on port {}: {e}", options.port))?;
+    let listen = Address::Tcp(options.port);
+    let recorder = start(&dir, listen, Address::Tcp(server.port), options)?;
     println!(
         "proxy on 127.0.0.1:{} in front of {} on port {}, traces in {}",
         options.port,
@@ -59,27 +64,178 @@ pub(crate) fn record(root: &Path, server: &Server, options: &Options) -> Result<
         server.port,
         dir.display()
     );
-    let keys: Keys = Arc::default();
-    let mut sessions = Vec::new();
-    for (i, client) in listener.incoming().enumerate() {
-        let client = client.map_err(|e| format!("cannot accept a client: {e}"))?;
-        let path = dir.join(format!("{}-{}.trace", options.name, i + 1));
-        let port = server.port;
-        let style = options.style;
-        let keys = Arc::clone(&keys);
-        sessions.push(thread::spawn(move || {
-            if let Err(error) = session(client, port, &path, style, &keys) {
-                eprintln!("{}: {error}", path.display());
+    recorder.wait()
+}
+
+/// Where the proxy listens, or where the server listens.
+#[derive(Debug, Clone)]
+pub(crate) enum Address {
+    /// A port on the loopback address.
+    Tcp(u16),
+    /// The path of a Unix socket.
+    Unix(PathBuf),
+}
+
+impl Address {
+    /// The Unix socket of a server, in the form of libpq: `.s.PGSQL.<port>` in its socket
+    /// directory.
+    pub(crate) fn socket(dir: &Path, port: u16) -> Address {
+        Address::Unix(dir.join(format!(".s.PGSQL.{port}")))
+    }
+
+    fn connect(&self) -> io::Result<Conn> {
+        match self {
+            Address::Tcp(port) => {
+                let stream = TcpStream::connect(("127.0.0.1", *port))?;
+                stream.set_nodelay(true)?;
+                Ok(Conn::Tcp(stream))
             }
-        }));
-        if options.sessions == Some(i + 1) {
-            break;
+            Address::Unix(path) => Ok(Conn::Unix(UnixStream::connect(path)?)),
         }
     }
-    for session in sessions {
-        let _ = session.join();
+}
+
+/// A proxy that runs on its own thread and writes a trace for each session in a directory.
+pub(crate) struct Recorder {
+    listen: Address,
+    stop: Arc<AtomicBool>,
+    thread: JoinHandle<Result<(), String>>,
+}
+
+/// Starts a proxy that listens on `listen` and forwards each session to `server`.
+pub(crate) fn start(
+    dir: &Path,
+    listen: Address,
+    server: Address,
+    options: &Options,
+) -> Result<Recorder, String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let listener = match &listen {
+        Address::Tcp(port) => Listener::Tcp(
+            TcpListener::bind(("127.0.0.1", *port))
+                .map_err(|e| format!("cannot listen on port {port}: {e}"))?,
+        ),
+        Address::Unix(path) => Listener::Unix(
+            UnixListener::bind(path)
+                .map_err(|e| format!("cannot listen on {}: {e}", path.display()))?,
+        ),
+    };
+    let stop = Arc::new(AtomicBool::new(false));
+    let thread = {
+        let (dir, stop) = (dir.to_owned(), Arc::clone(&stop));
+        let (name, sessions, style) = (options.name.clone(), options.sessions, options.style);
+        thread::spawn(move || {
+            let keys: Keys = Arc::default();
+            let mut threads = Vec::new();
+            for i in 0.. {
+                let client = listener.accept().map_err(|e| format!("cannot accept a client: {e}"));
+                if stop.load(Ordering::SeqCst) {
+                    break;
+                }
+                let client = client?;
+                let path = dir.join(format!("{name}-{}.trace", i + 1));
+                let (server, keys) = (server.clone(), Arc::clone(&keys));
+                threads.push(thread::spawn(move || {
+                    if let Err(error) = session(client, &server, &path, style, &keys) {
+                        eprintln!("{}: {error}", path.display());
+                    }
+                }));
+                if sessions == Some(i + 1) {
+                    break;
+                }
+            }
+            for thread in threads {
+                let _ = thread.join();
+            }
+            Ok(())
+        })
+    };
+    Ok(Recorder { listen, stop, thread })
+}
+
+impl Recorder {
+    /// Waits until the proxy has recorded the sessions of its options.
+    pub(crate) fn wait(self) -> Result<(), String> {
+        self.thread.join().unwrap_or_else(|_| Err("the proxy stopped with a panic".into()))
     }
-    Ok(())
+
+    /// Stops the proxy after the sessions that are open now end, and waits for them.
+    pub(crate) fn stop(self) -> Result<(), String> {
+        self.stop.store(true, Ordering::SeqCst);
+        // A connection wakes the thread that waits in accept, and it then sees the flag.
+        let _ = self.listen.connect();
+        let listen = self.listen.clone();
+        let done = self.wait();
+        if let Address::Unix(path) = listen {
+            let _ = std::fs::remove_file(path);
+        }
+        done
+    }
+}
+
+enum Listener {
+    Tcp(TcpListener),
+    Unix(UnixListener),
+}
+
+impl Listener {
+    fn accept(&self) -> io::Result<Conn> {
+        match self {
+            Listener::Tcp(l) => {
+                let (stream, _) = l.accept()?;
+                stream.set_nodelay(true)?;
+                Ok(Conn::Tcp(stream))
+            }
+            Listener::Unix(l) => Ok(Conn::Unix(l.accept()?.0)),
+        }
+    }
+}
+
+/// One side of a session, over TCP or a Unix socket.
+enum Conn {
+    Tcp(TcpStream),
+    Unix(UnixStream),
+}
+
+impl Conn {
+    fn try_clone(&self) -> io::Result<Conn> {
+        match self {
+            Conn::Tcp(s) => s.try_clone().map(Conn::Tcp),
+            Conn::Unix(s) => s.try_clone().map(Conn::Unix),
+        }
+    }
+
+    fn shutdown(&self, how: Shutdown) -> io::Result<()> {
+        match self {
+            Conn::Tcp(s) => s.shutdown(how),
+            Conn::Unix(s) => s.shutdown(how),
+        }
+    }
+}
+
+impl Read for Conn {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Conn::Tcp(s) => s.read(buf),
+            Conn::Unix(s) => s.read(buf),
+        }
+    }
+}
+
+impl Write for Conn {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            Conn::Tcp(s) => s.write(buf),
+            Conn::Unix(s) => s.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Conn::Tcp(s) => s.flush(),
+            Conn::Unix(s) => s.flush(),
+        }
+    }
 }
 
 /// The trace of one session. The two directions share it, so that the lines keep the order in
@@ -111,8 +267,8 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 type Keys = Arc<Mutex<HashMap<Vec<u8>, Arc<Mutex<Trace>>>>>;
 
 fn session(
-    mut client: TcpStream,
-    port: u16,
+    mut client: Conn,
+    server: &Address,
     path: &PathBuf,
     style: Style,
     keys: &Keys,
@@ -154,9 +310,7 @@ fn session(
         }
     };
 
-    let mut server = TcpStream::connect(("127.0.0.1", port))?;
-    server.set_nodelay(true)?;
-    client.set_nodelay(true)?;
+    let mut server = server.connect()?;
     server.write_all(&first)?;
     let Some(trace) = trace.filter(|_| code != frame::CANCEL_REQUEST) else {
         // The server reads the key and closes the connection without an answer.

@@ -210,11 +210,11 @@ fn session(lines: Vec<Line>) -> Result<Session, String> {
     Ok(Session { user, options, steps })
 }
 
-fn is_startup(bytes: &[u8]) -> bool {
+pub(crate) fn is_startup(bytes: &[u8]) -> bool {
     bytes.len() >= 8 && bytes[4..6] == [0, 3]
 }
 
-fn is_cancel(bytes: &[u8]) -> bool {
+pub(crate) fn is_cancel(bytes: &[u8]) -> bool {
     bytes.len() >= 16 && bytes[4..8] == frame::CANCEL_REQUEST.to_be_bytes()
 }
 
@@ -327,7 +327,7 @@ fn wait_until_active(server: &Server, pid: i32) {
 
 /// The map from each recorded user OID to the OID of the server, for one session.
 #[derive(Default)]
-struct Oids {
+pub(crate) struct Oids {
     map: HashMap<u32, u32>,
     /// The type of each column of the last `RowDescription`, or 0 for a column in binary format.
     columns: Vec<u32>,
@@ -335,7 +335,7 @@ struct Oids {
 
 impl Oids {
     /// The frame to send: the recorded frame with the OIDs of the server.
-    fn frontend(&self, f: &Frame) -> Frame {
+    pub(crate) fn frontend(&self, f: &Frame) -> Frame {
         if self.map.is_empty() {
             return f.clone();
         }
@@ -430,7 +430,7 @@ impl Oids {
 
     /// Learns the OIDs of the frames that the server sent for a step, and writes the recorded
     /// OIDs in their place. The k-th `DataRow` of the step goes with the k-th recorded one.
-    fn backend(&mut self, frames: &mut [Frame], lines: &[Vec<u8>]) {
+    pub(crate) fn backend(&mut self, frames: &mut [Frame], lines: &[Vec<u8>]) {
         let mut recorded = lines.iter().filter_map(|l| trace::data_row(l));
         for f in frames.iter_mut() {
             match f.tag {
